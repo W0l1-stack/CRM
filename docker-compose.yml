@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: crm-postgres
+    environment:
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password_dev
+      POSTGRES_DB: crm_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db-schema:/migrations
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: crm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend-go:
+    build:
+      context: ./backend-go
+      dockerfile: Dockerfile
+    container_name: crm-go-api
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgres://crm_user:crm_password_dev@postgres:5432/crm_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev_jwt_secret_change_in_production
+      PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend-go:/app
+    command: go run cmd/main.go
+
+  backend-node:
+    build:
+      context: ./backend-node
+      dockerfile: Dockerfile
+    container_name: crm-node-api
+    ports:
+      - "3002:3002"
+    environment:
+      DATABASE_URL: postgres://crm_user:crm_password_dev@postgres:5432/crm_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev_jwt_secret_change_in_production
+      PORT: 3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend-node:/app
+      - /app/node_modules
+    command: npm run dev
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: crm-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_GO: http://localhost:3001
+      REACT_APP_API_NODE: http://localhost:3002
+    depends_on:
+      - backend-go
+      - backend-node
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm start
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: crm-network

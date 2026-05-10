@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+vendor/
+go.sum
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+build/
+*.exe
+*.dll
+*.so
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sql.bak
+
+# Docker
+.docker
+docker-compose.override.yml
+
+# Node
+package-lock.json
+yarn.lock
+npm-debug.log*
