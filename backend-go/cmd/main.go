@@ -1,51 +1,46 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"net/http"
-	"os"
+	"time"
 
 	"crm-go-api/internal/api"
+	"crm-go-api/internal/config"
 	"crm-go-api/internal/database"
-	"crm-go-api/internal/middleware"
 )
 
 func main() {
-	// Load environment
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3001"
-	}
-
-	// Initialize database
-	db, err := database.Connect()
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Database connection failed: %v", err)
-	}
-	defer db.Close()
-
-	// Run migrations
-	if err := database.Migrate(db); err != nil {
-		log.Fatalf("Migration failed: %v", err)
+		log.Fatalf("config: %v", err)
 	}
 
-	// Setup router
-	router := api.NewRouter(db)
+	ctx := context.Background()
 
-	// Global middleware
-	router.Use(middleware.CORS)
-	router.Use(middleware.Logger)
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("database connection failed: %v", err)
+	}
+	defer pool.Close()
 
-	// Health check
-	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok"}`)
-	}).Methods("GET")
+	if err := database.Migrate(ctx, pool); err != nil {
+		log.Fatalf("migration failed: %v", err)
+	}
 
-	// Start server
-	log.Printf("Go API Server starting on port %s", port)
-	if err := http.ListenAndServe(":"+port, router); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	router := api.NewRouter(pool, cfg)
+
+	srv := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	log.Printf("Go API server listening on port %s", cfg.Port)
+	if err := srv.ListenAndServe(); err != nil {
+		log.Fatalf("server failed: %v", err)
 	}
 }

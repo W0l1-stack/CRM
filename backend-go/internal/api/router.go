@@ -1,33 +1,74 @@
 package api
 
 import (
-	"database/sql"
+	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"crm-go-api/internal/api/auth"
+	"crm-go-api/internal/api/contacts"
+	"crm-go-api/internal/api/conversations"
+	"crm-go-api/internal/api/deals"
+	"crm-go-api/internal/api/pipelines"
+	"crm-go-api/internal/config"
+	"crm-go-api/internal/middleware"
 )
 
-func NewRouter(db *sql.DB) *mux.Router {
+// NewRouter wires every dependency and returns the configured router.
+// Public auth routes live under /api/v1/auth; everything else under /api/v1 is
+// behind the Auth + RequireTenant middleware so every request carries account_id.
+func NewRouter(pool *pgxpool.Pool, cfg *config.Config) *mux.Router {
 	router := mux.NewRouter()
 
-	// Contact routes
-	contactHandler := NewContactHandler(db)
-	router.HandleFunc("/api/contacts", contactHandler.ListContacts).Methods("GET")
-	router.HandleFunc("/api/contacts", contactHandler.CreateContact).Methods("POST")
-	router.HandleFunc("/api/contacts/{id}", contactHandler.GetContact).Methods("GET")
-	router.HandleFunc("/api/contacts/{id}", contactHandler.UpdateContact).Methods("PUT")
-	router.HandleFunc("/api/contacts/{id}", contactHandler.DeleteContact).Methods("DELETE")
+	router.Use(middleware.CORS)
+	router.Use(middleware.Logger)
 
-	// Deal routes
-	dealHandler := NewDealHandler(db)
-	router.HandleFunc("/api/deals", dealHandler.ListDeals).Methods("GET")
-	router.HandleFunc("/api/deals", dealHandler.CreateDeal).Methods("POST")
-	router.HandleFunc("/api/deals/{id}", dealHandler.GetDeal).Methods("GET")
-	router.HandleFunc("/api/deals/{id}", dealHandler.UpdateDeal).Methods("PUT")
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"status":"ok"},"error":null,"meta":null}`))
+	}).Methods(http.MethodGet)
 
-	// Message routes
-	messageHandler := NewMessageHandler(db)
-	router.HandleFunc("/api/messages", messageHandler.CreateMessage).Methods("POST")
-	router.HandleFunc("/api/messages/contact/{contact_id}", messageHandler.ListMessagesForContact).Methods("GET")
+	// ---- Public auth routes ----
+	authHandler := auth.NewHandler(
+		auth.NewService(auth.NewRepository(pool), cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL),
+	)
+	public := router.PathPrefix("/api/v1/auth").Subrouter()
+	public.HandleFunc("/register", authHandler.Register).Methods(http.MethodPost)
+	public.HandleFunc("/login", authHandler.Login).Methods(http.MethodPost)
+	public.HandleFunc("/refresh", authHandler.Refresh).Methods(http.MethodPost)
+
+	// ---- Protected routes ----
+	protected := router.PathPrefix("/api/v1").Subrouter()
+	protected.Use(middleware.Auth(cfg.JWTSecret))
+	protected.Use(middleware.RequireTenant)
+
+	contactHandler := contacts.NewHandler(contacts.NewService(contacts.NewRepository(pool)))
+	protected.HandleFunc("/contacts", contactHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/contacts", contactHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/contacts/{id}", contactHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/contacts/{id}", contactHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/contacts/{id}", contactHandler.Delete).Methods(http.MethodDelete)
+
+	pipelineHandler := pipelines.NewHandler(pipelines.NewService(pipelines.NewRepository(pool)))
+	protected.HandleFunc("/pipelines", pipelineHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/pipelines", pipelineHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/pipelines/{id}", pipelineHandler.Get).Methods(http.MethodGet)
+
+	dealHandler := deals.NewHandler(deals.NewService(deals.NewRepository(pool)))
+	protected.HandleFunc("/deals", dealHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/deals", dealHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/deals/{id}", dealHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/deals/{id}", dealHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/deals/{id}", dealHandler.Delete).Methods(http.MethodDelete)
+
+	convHandler := conversations.NewHandler(conversations.NewService(conversations.NewRepository(pool)))
+	protected.HandleFunc("/conversations", convHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/conversations", convHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/conversations/{id}", convHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/conversations/{id}/status", convHandler.UpdateStatus).Methods(http.MethodPut)
+	protected.HandleFunc("/conversations/{id}/messages", convHandler.ListMessages).Methods(http.MethodGet)
+	protected.HandleFunc("/conversations/{id}/messages", convHandler.CreateMessage).Methods(http.MethodPost)
 
 	return router
 }
