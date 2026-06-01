@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"crm-go-api/internal/api/appointments"
 	"crm-go-api/internal/api/auth"
 	"crm-go-api/internal/api/automations"
 	"crm-go-api/internal/api/contacts"
@@ -40,6 +41,13 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	public.HandleFunc("/login", authHandler.Login).Methods(http.MethodPost)
 	public.HandleFunc("/refresh", authHandler.Refresh).Methods(http.MethodPost)
 
+	// ---- Public booking routes (no auth; identified by appointment type id) ----
+	apptHandler := appointments.NewHandler(appointments.NewService(appointments.NewRepository(pool), publisher))
+	booking := router.PathPrefix("/api/v1/public/appointment-types").Subrouter()
+	booking.HandleFunc("/{id}", apptHandler.PublicGetType).Methods(http.MethodGet)
+	booking.HandleFunc("/{id}/slots", apptHandler.PublicSlots).Methods(http.MethodGet)
+	booking.HandleFunc("/{id}/book", apptHandler.PublicBook).Methods(http.MethodPost)
+
 	// ---- Protected routes ----
 	protected := router.PathPrefix("/api/v1").Subrouter()
 	protected.Use(middleware.Auth(cfg.JWTSecret))
@@ -72,6 +80,12 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/automations/{id}", automationHandler.Get).Methods(http.MethodGet)
 	protected.HandleFunc("/automations/{id}", automationHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/automations/{id}", automationHandler.Delete).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/appointment-types", apptHandler.ListTypes).Methods(http.MethodGet)
+	protected.HandleFunc("/appointment-types", apptHandler.CreateType).Methods(http.MethodPost)
+	protected.HandleFunc("/appointment-types/{id}", apptHandler.DeleteType).Methods(http.MethodDelete)
+	protected.HandleFunc("/appointments", apptHandler.ListAppointments).Methods(http.MethodGet)
+	protected.HandleFunc("/appointments/{id}/status", apptHandler.UpdateStatus).Methods(http.MethodPut)
 
 	convHandler := conversations.NewHandler(conversations.NewService(conversations.NewRepository(pool)))
 	protected.HandleFunc("/conversations", convHandler.List).Methods(http.MethodGet)

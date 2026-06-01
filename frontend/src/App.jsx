@@ -9,12 +9,15 @@ import ContactDetail from '@/pages/ContactDetail';
 import Pipeline from '@/pages/Pipeline';
 import Conversations from '@/pages/Conversations';
 import Automations from '@/pages/Automations';
+import Calendar from '@/pages/Calendar';
+import Booking from '@/pages/Booking';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/book/:typeId" element={<Booking />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<PageWrapper />}>
@@ -24,6 +27,7 @@ export default function App() {
           <Route path="/pipeline" element={<Pipeline />} />
           <Route path="/conversations" element={<Conversations />} />
           <Route path="/automations" element={<Automations />} />
+          <Route path="/calendar" element={<Calendar />} />
         </Route>
       </Route>
     </Routes>
