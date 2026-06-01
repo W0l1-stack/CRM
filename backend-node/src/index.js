@@ -7,6 +7,7 @@ const config = require('./config');
 const logger = require('./logger');
 const { initSocket } = require('./socket/server');
 const { startEventSubscriber } = require('./events/subscriber');
+const { startTriggerConsumer } = require('./events/triggers');
 const { startEmailWorker } = require('./workers/email.worker');
 const { startSmsWorker } = require('./workers/sms.worker');
 const { startAutomationWorker } = require('./workers/automation.worker');
@@ -30,6 +31,9 @@ initSocket(server);
 
 // Bridge Redis account event channels -> Socket.io rooms.
 startEventSubscriber();
+
+// Run automations off the Go API's trigger channel.
+startTriggerConsumer();
 
 // BullMQ workers (email, SMS, automation steps).
 const workers = [startEmailWorker(), startSmsWorker(), startAutomationWorker()];

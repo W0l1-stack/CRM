@@ -8,6 +8,7 @@ import Contacts from '@/pages/Contacts';
 import ContactDetail from '@/pages/ContactDetail';
 import Pipeline from '@/pages/Pipeline';
 import Conversations from '@/pages/Conversations';
+import Automations from '@/pages/Automations';
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/contacts/:id" element={<ContactDetail />} />
           <Route path="/pipeline" element={<Pipeline />} />
           <Route path="/conversations" element={<Conversations />} />
+          <Route path="/automations" element={<Automations />} />
         </Route>
       </Route>
     </Routes>

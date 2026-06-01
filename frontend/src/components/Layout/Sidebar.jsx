@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Users, KanbanSquare, MessageSquare, LayoutDashboard } from 'lucide-react';
+import { Users, KanbanSquare, MessageSquare, LayoutDashboard, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const nav = [
@@ -7,6 +7,7 @@ const nav = [
   { to: '/contacts', label: 'Contacts', icon: Users },
   { to: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
   { to: '/conversations', label: 'Conversations', icon: MessageSquare },
+  { to: '/automations', label: 'Automations', icon: Zap },
 ];
 
 export default function Sidebar() {

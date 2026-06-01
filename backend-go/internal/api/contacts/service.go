@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"crm-go-api/internal/events"
 	"crm-go-api/internal/models"
 )
 
@@ -16,11 +17,12 @@ var ErrValidation = errors.New("validation failed")
 
 // Service holds contact business logic and validation.
 type Service struct {
-	repo *Repository
+	repo      *Repository
+	publisher *events.Publisher // nil-safe; emits automation triggers
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, publisher *events.Publisher) *Service {
+	return &Service{repo: repo, publisher: publisher}
 }
 
 func (s *Service) List(ctx context.Context, accountID uuid.UUID, search, tag string) ([]models.Contact, error) {
@@ -40,7 +42,14 @@ func (s *Service) Create(ctx context.Context, accountID uuid.UUID, c *models.Con
 		manual := "manual"
 		c.Source = &manual
 	}
-	return s.repo.Create(ctx, accountID, c)
+	created, err := s.repo.Create(ctx, accountID, c)
+	if err != nil {
+		return nil, err
+	}
+	// Best-effort: fire the contact_created automation trigger. A publish
+	// failure must not fail contact creation.
+	_ = s.publisher.PublishTrigger(ctx, accountID, models.TriggerContactCreated, created)
+	return created, nil
 }
 
 func (s *Service) Update(ctx context.Context, accountID, id uuid.UUID, c *models.Contact) (*models.Contact, error) {

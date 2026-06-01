@@ -7,18 +7,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"crm-go-api/internal/api/auth"
+	"crm-go-api/internal/api/automations"
 	"crm-go-api/internal/api/contacts"
 	"crm-go-api/internal/api/conversations"
 	"crm-go-api/internal/api/deals"
 	"crm-go-api/internal/api/pipelines"
 	"crm-go-api/internal/config"
+	"crm-go-api/internal/events"
 	"crm-go-api/internal/middleware"
 )
 
 // NewRouter wires every dependency and returns the configured router.
 // Public auth routes live under /api/v1/auth; everything else under /api/v1 is
 // behind the Auth + RequireTenant middleware so every request carries account_id.
-func NewRouter(pool *pgxpool.Pool, cfg *config.Config) *mux.Router {
+func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publisher) *mux.Router {
 	router := mux.NewRouter()
 
 	router.Use(middleware.CORS)
@@ -43,7 +45,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config) *mux.Router {
 	protected.Use(middleware.Auth(cfg.JWTSecret))
 	protected.Use(middleware.RequireTenant)
 
-	contactHandler := contacts.NewHandler(contacts.NewService(contacts.NewRepository(pool)))
+	contactHandler := contacts.NewHandler(contacts.NewService(contacts.NewRepository(pool), publisher))
 	protected.HandleFunc("/contacts", contactHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/contacts", contactHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/contacts/import", contactHandler.Import).Methods(http.MethodPost)
@@ -63,6 +65,13 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config) *mux.Router {
 	protected.HandleFunc("/deals/{id}", dealHandler.Get).Methods(http.MethodGet)
 	protected.HandleFunc("/deals/{id}", dealHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/deals/{id}", dealHandler.Delete).Methods(http.MethodDelete)
+
+	automationHandler := automations.NewHandler(automations.NewService(automations.NewRepository(pool)))
+	protected.HandleFunc("/automations", automationHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/automations", automationHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/automations/{id}", automationHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/automations/{id}", automationHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/automations/{id}", automationHandler.Delete).Methods(http.MethodDelete)
 
 	convHandler := conversations.NewHandler(conversations.NewService(conversations.NewRepository(pool)))
 	protected.HandleFunc("/conversations", convHandler.List).Methods(http.MethodGet)
