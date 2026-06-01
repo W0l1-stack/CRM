@@ -1,64 +1,51 @@
-const express = require('express');
 const http = require('http');
-const WebSocket = require('ws');
+const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+const pinoHttp = require('pino-http');
+
+const config = require('./config');
+const logger = require('./logger');
+const { initSocket } = require('./socket/server');
+const { startEventSubscriber } = require('./events/subscriber');
+const { startEmailWorker } = require('./workers/email.worker');
+const { startSmsWorker } = require('./workers/sms.worker');
+const { startAutomationWorker } = require('./workers/automation.worker');
+const twilioWebhook = require('./webhooks/twilio');
+const resendWebhook = require('./webhooks/resend');
 
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/ws' });
-
-const messageRoutes = require('./routes/messages');
-const webhookRoutes = require('./routes/webhooks');
-
 app.use(cors());
-app.use(express.json());
+app.use(pinoHttp({ logger }));
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+app.get('/health', (_req, res) => res.json({ data: { status: 'ok' }, error: null, meta: null }));
+
+// Inbound webhooks (each route parses its own body type).
+app.use('/webhooks', twilioWebhook);
+app.use('/webhooks', resendWebhook);
+
+const server = http.createServer(app);
+
+// Real-time: Socket.io with JWT auth + per-account rooms.
+initSocket(server);
+
+// Bridge Redis account event channels -> Socket.io rooms.
+startEventSubscriber();
+
+// BullMQ workers (email, SMS, automation steps).
+const workers = [startEmailWorker(), startSmsWorker(), startAutomationWorker()];
+
+server.listen(config.port, () => {
+  logger.info({ port: config.port }, 'Lydia Node real-time service listening');
 });
 
-// Routes
-app.use('/api/messages', messageRoutes);
-app.use('/api/webhooks', webhookRoutes);
+// Graceful shutdown.
+async function shutdown(signal) {
+  logger.info({ signal }, 'shutting down');
+  await Promise.allSettled(workers.map((w) => w.close()));
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
-// WebSocket connections
-const clients = new Map();
-
-wss.on('connection', (ws, req) => {
-  const userId = req.headers['x-user-id'];
-  if (!userId) {
-    ws.close(1008, 'User ID required');
-    return;
-  }
-
-  console.log(`Client connected: ${userId}`);
-  clients.set(userId, ws);
-
-  ws.on('message', (data) => {
-    try {
-      const message = JSON.parse(data);
-      console.log(`Message from ${userId}:`, message);
-      // Broadcast to other users or handle messaging
-    } catch (err) {
-      console.error('Message parse error:', err);
-    }
-  });
-
-  ws.on('close', () => {
-    console.log(`Client disconnected: ${userId}`);
-    clients.delete(userId);
-  });
-
-  ws.on('error', (err) => {
-    console.error(`WebSocket error for ${userId}:`, err);
-  });
-});
-
-const PORT = process.env.PORT || 3002;
-server.listen(PORT, () => {
-  console.log(`Node.js API Server running on port ${PORT}`);
-});
-
-module.exports = { app, wss, clients };
+module.exports = { app, server };
