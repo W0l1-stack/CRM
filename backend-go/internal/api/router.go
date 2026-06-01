@@ -46,7 +46,9 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config) *mux.Router {
 	contactHandler := contacts.NewHandler(contacts.NewService(contacts.NewRepository(pool)))
 	protected.HandleFunc("/contacts", contactHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/contacts", contactHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/contacts/import", contactHandler.Import).Methods(http.MethodPost)
 	protected.HandleFunc("/contacts/{id}", contactHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/contacts/{id}/timeline", contactHandler.Timeline).Methods(http.MethodGet)
 	protected.HandleFunc("/contacts/{id}", contactHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/contacts/{id}", contactHandler.Delete).Methods(http.MethodDelete)
 

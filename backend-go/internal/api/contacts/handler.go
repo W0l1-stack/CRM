@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -142,4 +143,65 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]string{"status": "deleted"}, nil)
+}
+
+// Import handles POST /api/v1/contacts/import — a multipart upload with a "file"
+// field containing a CSV of contacts.
+func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
+	accountID, ok := middleware.AccountID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", "no tenant context")
+		return
+	}
+
+	if err := r.ParseMultipartForm(16 << 20); err != nil { // 16 MB
+		response.Error(w, http.StatusBadRequest, "bad_request", "could not parse upload")
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "missing 'file' upload field")
+		return
+	}
+	defer file.Close()
+
+	result, err := h.svc.ImportCSV(r.Context(), accountID, file)
+	if errors.Is(err, ErrValidation) {
+		response.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal_error", "could not import contacts")
+		return
+	}
+	response.JSON(w, http.StatusOK, result, nil)
+}
+
+// Timeline handles GET /api/v1/contacts/{id}/timeline.
+func (h *Handler) Timeline(w http.ResponseWriter, r *http.Request) {
+	accountID, ok := middleware.AccountID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", "no tenant context")
+		return
+	}
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "invalid contact id")
+		return
+	}
+	limit := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		limit, _ = strconv.Atoi(l)
+	}
+
+	events, err := h.svc.Timeline(r.Context(), accountID, id, limit)
+	if errors.Is(err, ErrNotFound) {
+		response.Error(w, http.StatusNotFound, "not_found", "contact not found")
+		return
+	}
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal_error", "could not load timeline")
+		return
+	}
+	response.JSON(w, http.StatusOK, events, map[string]interface{}{"count": len(events)})
 }

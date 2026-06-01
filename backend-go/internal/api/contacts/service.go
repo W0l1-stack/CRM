@@ -54,3 +54,15 @@ func (s *Service) Update(ctx context.Context, accountID, id uuid.UUID, c *models
 func (s *Service) Delete(ctx context.Context, accountID, id uuid.UUID) error {
 	return s.repo.Delete(ctx, accountID, id)
 }
+
+// Timeline returns a contact's recent activity. It first confirms the contact
+// belongs to the account (so unknown ids return ErrNotFound, not an empty list).
+func (s *Service) Timeline(ctx context.Context, accountID, contactID uuid.UUID, limit int) ([]TimelineEvent, error) {
+	if _, err := s.repo.GetByID(ctx, accountID, contactID); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	return s.repo.Timeline(ctx, accountID, contactID, limit)
+}
