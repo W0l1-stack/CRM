@@ -1,14 +1,18 @@
 package api
 
 import (
+	"context"
 	"net/http"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"crm-go-api/internal/api/appointments"
 	"crm-go-api/internal/api/auth"
 	"crm-go-api/internal/api/automations"
+	"crm-go-api/internal/api/billing"
 	"crm-go-api/internal/api/campaigns"
 	"crm-go-api/internal/api/contacts"
 	"crm-go-api/internal/api/conversations"
@@ -58,10 +62,26 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	campaignHandler := campaigns.NewHandler(campaigns.NewService(campaigns.NewRepository(pool), publisher))
 	router.HandleFunc("/api/v1/public/unsubscribe", campaignHandler.Unsubscribe).Methods(http.MethodGet)
 
+	// ---- Billing (Stripe) ----
+	billingRepo := billing.NewRepository(pool)
+	billingHandler := billing.NewHandler(billing.NewService(
+		billingRepo, cfg.StripeSecretKey, cfg.StripeWebhookKey, cfg.StripePriceStarter, cfg.StripePricePro, cfg.FrontendURL,
+	))
+	// Stripe webhook is public (verified by signature, not JWT).
+	router.HandleFunc("/api/v1/webhooks/stripe", billingHandler.Webhook).Methods(http.MethodPost)
+
 	// ---- Protected routes ----
 	protected := router.PathPrefix("/api/v1").Subrouter()
 	protected.Use(middleware.Auth(cfg.JWTSecret))
 	protected.Use(middleware.RequireTenant)
+	// Block mutating requests once a trial has expired (billing routes exempt).
+	protected.Use(middleware.TrialGuard(func(ctx context.Context, accountID uuid.UUID) (string, *time.Time, error) {
+		acc, err := billingRepo.GetAccount(ctx, accountID)
+		if err != nil {
+			return "", nil, err
+		}
+		return acc.Plan, acc.TrialEndsAt, nil
+	}))
 
 	contactHandler := contacts.NewHandler(contacts.NewService(contacts.NewRepository(pool), publisher))
 	protected.HandleFunc("/contacts", contactHandler.List).Methods(http.MethodGet)
@@ -96,6 +116,10 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/appointment-types/{id}", apptHandler.DeleteType).Methods(http.MethodDelete)
 	protected.HandleFunc("/appointments", apptHandler.ListAppointments).Methods(http.MethodGet)
 	protected.HandleFunc("/appointments/{id}/status", apptHandler.UpdateStatus).Methods(http.MethodPut)
+
+	protected.HandleFunc("/billing", billingHandler.Status).Methods(http.MethodGet)
+	protected.HandleFunc("/billing/checkout", billingHandler.Checkout).Methods(http.MethodPost)
+	protected.HandleFunc("/billing/portal", billingHandler.Portal).Methods(http.MethodPost)
 
 	protected.HandleFunc("/forms", formHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/forms", formHandler.Create).Methods(http.MethodPost)

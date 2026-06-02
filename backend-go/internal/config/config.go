@@ -20,6 +20,9 @@ type Config struct {
 	TwilioFromNumber string
 	StripeSecretKey  string
 	StripeWebhookKey string
+	StripePriceStarter string
+	StripePricePro     string
+	FrontendURL        string
 }
 
 // Load reads configuration from the environment and validates required values.
@@ -37,6 +40,9 @@ func Load() (*Config, error) {
 		TwilioFromNumber: os.Getenv("TWILIO_FROM_NUMBER"),
 		StripeSecretKey:  os.Getenv("STRIPE_SECRET_KEY"),
 		StripeWebhookKey: os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		StripePriceStarter: os.Getenv("STRIPE_PRICE_STARTER"),
+		StripePricePro:     os.Getenv("STRIPE_PRICE_PRO"),
+		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:3000"),
 	}
 
 	if cfg.DatabaseURL == "" {

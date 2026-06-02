@@ -14,6 +14,7 @@ import Booking from '@/pages/Booking';
 import Forms from '@/pages/Forms';
 import PublicForm from '@/pages/PublicForm';
 import Campaigns from '@/pages/Campaigns';
+import Billing from '@/pages/Billing';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/forms" element={<Forms />} />
           <Route path="/campaigns" element={<Campaigns />} />
+          <Route path="/billing" element={<Billing />} />
         </Route>
       </Route>
     </Routes>
