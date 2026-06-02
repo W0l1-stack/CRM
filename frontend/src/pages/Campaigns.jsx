@@ -4,6 +4,7 @@ import {
   useCampaigns,
   useCreateCampaign,
   useSendCampaign,
+  useScheduleCampaign,
   useDeleteCampaign,
 } from '@/hooks/useCampaigns';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,6 @@ const statusVariant = { sent: 'default', sending: 'secondary', draft: 'outline',
 
 export default function Campaigns() {
   const { data: campaigns = [], isLoading } = useCampaigns();
-  const sendCampaign = useSendCampaign();
   const deleteCampaign = useDeleteCampaign();
   const [showCreate, setShowCreate] = useState(false);
 
@@ -53,16 +53,8 @@ export default function Campaigns() {
                     <span className="text-xs text-muted-foreground">{c.stats.sent} sent</span>
                   ) : null}
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    disabled={c.status === 'sending' || c.status === 'sent' || sendCampaign.isPending}
-                    onClick={() => {
-                      if (window.confirm(`Send "${c.name}" now?`)) sendCampaign.mutate(c.id);
-                    }}
-                  >
-                    <Send className="h-4 w-4" /> Send
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <CampaignActions campaign={c} />
                   <Button variant="ghost" size="icon" onClick={() => deleteCampaign.mutate(c.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -76,6 +68,43 @@ export default function Campaigns() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function CampaignActions({ campaign }) {
+  const sendCampaign = useSendCampaign();
+  const scheduleCampaign = useScheduleCampaign();
+  const [when, setWhen] = useState('');
+  const locked = campaign.status === 'sending' || campaign.status === 'sent';
+
+  if (locked) {
+    return <span className="text-xs text-muted-foreground capitalize">{campaign.status}</span>;
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="datetime-local"
+        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+        value={when}
+        onChange={(e) => setWhen(e.target.value)}
+      />
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!when || scheduleCampaign.isPending}
+        onClick={() => scheduleCampaign.mutate({ id: campaign.id, scheduled_at: new Date(when).toISOString() })}
+      >
+        Schedule
+      </Button>
+      <Button
+        size="sm"
+        disabled={sendCampaign.isPending}
+        onClick={() => { if (window.confirm(`Send "${campaign.name}" now?`)) sendCampaign.mutate(campaign.id); }}
+      >
+        <Send className="h-4 w-4" /> Send
+      </Button>
     </div>
   );
 }

@@ -75,6 +75,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "validation_error", err.Error())
 		return
 	}
+	if errors.Is(err, ErrLimitReached) {
+		response.Error(w, http.StatusPaymentRequired, "plan_limit", err.Error())
+		return
+	}
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "internal_error", "could not create pipeline")
 		return

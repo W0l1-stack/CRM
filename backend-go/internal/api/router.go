@@ -21,9 +21,11 @@ import (
 	"crm-go-api/internal/api/deals"
 	"crm-go-api/internal/api/forms"
 	"crm-go-api/internal/api/pipelines"
+	"crm-go-api/internal/api/team"
 	"crm-go-api/internal/config"
 	"crm-go-api/internal/events"
 	"crm-go-api/internal/middleware"
+	"crm-go-api/internal/plan"
 	"crm-go-api/internal/ratelimit"
 )
 
@@ -114,7 +116,9 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 		return acc.Plan, acc.TrialEndsAt, nil
 	}))
 
-	contactHandler := contacts.NewHandler(contacts.NewService(contacts.NewRepository(pool), publisher))
+	enforcer := plan.NewEnforcer(pool)
+
+	contactHandler := contacts.NewHandler(contacts.NewService(contacts.NewRepository(pool), publisher, enforcer))
 	protected.HandleFunc("/contacts", contactHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/contacts", contactHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/contacts/import", contactHandler.Import).Methods(http.MethodPost)
@@ -123,7 +127,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/contacts/{id}", contactHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/contacts/{id}", contactHandler.Delete).Methods(http.MethodDelete)
 
-	pipelineHandler := pipelines.NewHandler(pipelines.NewService(pipelines.NewRepository(pool)))
+	pipelineHandler := pipelines.NewHandler(pipelines.NewService(pipelines.NewRepository(pool), enforcer))
 	protected.HandleFunc("/pipelines", pipelineHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/pipelines", pipelineHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/pipelines/{id}", pipelineHandler.Get).Methods(http.MethodGet)
@@ -135,7 +139,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/deals/{id}", dealHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/deals/{id}", dealHandler.Delete).Methods(http.MethodDelete)
 
-	automationHandler := automations.NewHandler(automations.NewService(automations.NewRepository(pool)))
+	automationHandler := automations.NewHandler(automations.NewService(automations.NewRepository(pool), enforcer))
 	protected.HandleFunc("/automations", automationHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/automations", automationHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/automations/{id}", automationHandler.Get).Methods(http.MethodGet)
@@ -152,6 +156,16 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/billing/checkout", billingHandler.Checkout).Methods(http.MethodPost)
 	protected.HandleFunc("/billing/portal", billingHandler.Portal).Methods(http.MethodPost)
 
+	teamHandler := team.NewHandler(team.NewService(team.NewRepository(pool), enforcer))
+	protected.HandleFunc("/me", teamHandler.Me).Methods(http.MethodGet)
+	protected.HandleFunc("/me", teamHandler.UpdateMe).Methods(http.MethodPut)
+	protected.HandleFunc("/account", teamHandler.GetAccount).Methods(http.MethodGet)
+	protected.HandleFunc("/account", teamHandler.UpdateAccount).Methods(http.MethodPut)
+	protected.HandleFunc("/team", teamHandler.ListMembers).Methods(http.MethodGet)
+	protected.HandleFunc("/team", teamHandler.Invite).Methods(http.MethodPost)
+	protected.HandleFunc("/team/{id}/role", teamHandler.ChangeRole).Methods(http.MethodPut)
+	protected.HandleFunc("/team/{id}", teamHandler.Remove).Methods(http.MethodDelete)
+
 	protected.HandleFunc("/forms", formHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/forms", formHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/forms/{id}", formHandler.Get).Methods(http.MethodGet)
@@ -164,6 +178,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/campaigns/{id}", campaignHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/campaigns/{id}", campaignHandler.Delete).Methods(http.MethodDelete)
 	protected.HandleFunc("/campaigns/{id}/send", campaignHandler.Send).Methods(http.MethodPost)
+	protected.HandleFunc("/campaigns/{id}/schedule", campaignHandler.Schedule).Methods(http.MethodPost)
 
 	convHandler := conversations.NewHandler(conversations.NewService(conversations.NewRepository(pool), publisher))
 	protected.HandleFunc("/conversations", convHandler.List).Methods(http.MethodGet)

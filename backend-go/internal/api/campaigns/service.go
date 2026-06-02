@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -63,12 +64,36 @@ func (s *Service) Send(ctx context.Context, accountID, id uuid.UUID) (*models.Ca
 	if err := s.repo.SetStatus(ctx, accountID, id, "sending"); err != nil {
 		return nil, err
 	}
-	if err := s.publisher.PublishCampaignSend(ctx, accountID, id); err != nil {
+	if err := s.publisher.PublishCampaignSend(ctx, accountID, id, 0); err != nil {
 		// Roll back to draft so it can be retried.
 		_ = s.repo.SetStatus(ctx, accountID, id, "draft")
 		return nil, fmt.Errorf("campaigns.Send: %w", err)
 	}
 	c.Status = "sending"
+	return c, nil
+}
+
+// Schedule queues a campaign to send at a future time via a delayed job.
+func (s *Service) Schedule(ctx context.Context, accountID, id uuid.UUID, scheduledAt time.Time) (*models.Campaign, error) {
+	c, err := s.repo.GetByID(ctx, accountID, id)
+	if err != nil {
+		return nil, err
+	}
+	if c.Status == "sending" || c.Status == "sent" {
+		return nil, ErrAlreadySent
+	}
+	if !scheduledAt.After(time.Now()) {
+		return nil, fmt.Errorf("campaigns.Schedule: %w: scheduled_at must be in the future", ErrValidation)
+	}
+	if err := s.repo.SetScheduled(ctx, accountID, id, scheduledAt); err != nil {
+		return nil, err
+	}
+	delayMs := time.Until(scheduledAt).Milliseconds()
+	if err := s.publisher.PublishCampaignSend(ctx, accountID, id, delayMs); err != nil {
+		_ = s.repo.SetStatus(ctx, accountID, id, "draft")
+		return nil, fmt.Errorf("campaigns.Schedule: %w", err)
+	}
+	c.Status = "scheduled"
 	return c, nil
 }
 

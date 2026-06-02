@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -160,6 +161,51 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "internal_error", "could not send campaign")
+		return
+	}
+	response.JSON(w, http.StatusOK, c, nil)
+}
+
+type scheduleRequest struct {
+	ScheduledAt string `json:"scheduled_at"`
+}
+
+func (h *Handler) Schedule(w http.ResponseWriter, r *http.Request) {
+	accountID, ok := middleware.AccountID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", "no tenant context")
+		return
+	}
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "invalid campaign id")
+		return
+	}
+	var req scheduleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+	at, err := time.Parse(time.RFC3339, req.ScheduledAt)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "scheduled_at must be RFC3339")
+		return
+	}
+	c, err := h.svc.Schedule(r.Context(), accountID, id, at)
+	if errors.Is(err, ErrValidation) {
+		response.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	if errors.Is(err, ErrNotFound) {
+		response.Error(w, http.StatusNotFound, "not_found", "campaign not found")
+		return
+	}
+	if errors.Is(err, ErrAlreadySent) {
+		response.Error(w, http.StatusConflict, "already_sent", "campaign is already sending or sent")
+		return
+	}
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal_error", "could not schedule campaign")
 		return
 	}
 	response.JSON(w, http.StatusOK, c, nil)

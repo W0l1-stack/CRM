@@ -24,6 +24,14 @@ export function useSendCampaign() {
   });
 }
 
+export function useScheduleCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, scheduled_at }) => api.post(`/campaigns/${id}/schedule`, { scheduled_at }).then(unwrap),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['campaigns'] }),
+  });
+}
+
 export function useDeleteCampaign() {
   const qc = useQueryClient();
   return useMutation({

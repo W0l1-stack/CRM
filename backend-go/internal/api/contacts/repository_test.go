@@ -157,7 +157,7 @@ func TestListFiltersByTag(t *testing.T) {
 
 func TestImportCSV(t *testing.T) {
 	pool := testDB(t)
-	svc := NewService(NewRepository(pool), nil)
+	svc := NewService(NewRepository(pool), nil, nil)
 	ctx := context.Background()
 	accountID := seedAccount(t, pool)
 

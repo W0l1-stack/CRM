@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -109,6 +110,20 @@ func (r *Repository) SetStatus(ctx context.Context, accountID, id uuid.UUID, sta
 	tag, err := r.db.Exec(ctx, `UPDATE campaigns SET status = $3, updated_at = NOW() WHERE account_id = $1 AND id = $2`, accountID, id, status)
 	if err != nil {
 		return fmt.Errorf("campaigns.SetStatus: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetScheduled marks a campaign scheduled for a future time.
+func (r *Repository) SetScheduled(ctx context.Context, accountID, id uuid.UUID, scheduledAt time.Time) error {
+	tag, err := r.db.Exec(ctx,
+		`UPDATE campaigns SET status = 'scheduled', scheduled_at = $3, updated_at = NOW() WHERE account_id = $1 AND id = $2`,
+		accountID, id, scheduledAt)
+	if err != nil {
+		return fmt.Errorf("campaigns.SetScheduled: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound

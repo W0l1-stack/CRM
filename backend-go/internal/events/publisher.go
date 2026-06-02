@@ -89,12 +89,13 @@ func (p *Publisher) PublishOutbound(ctx context.Context, accountID, messageID uu
 	return nil
 }
 
-// PublishCampaignSend asks the Node service to send a campaign to its recipients.
-func (p *Publisher) PublishCampaignSend(ctx context.Context, accountID, campaignID uuid.UUID) error {
+// PublishCampaignSend asks the Node service to send a campaign to its
+// recipients. delayMs > 0 schedules the send for later (BullMQ delayed job).
+func (p *Publisher) PublishCampaignSend(ctx context.Context, accountID, campaignID uuid.UUID, delayMs int64) error {
 	if p == nil {
 		return nil
 	}
-	body, err := json.Marshal(map[string]interface{}{"account_id": accountID, "campaign_id": campaignID})
+	body, err := json.Marshal(map[string]interface{}{"account_id": accountID, "campaign_id": campaignID, "delay_ms": delayMs})
 	if err != nil {
 		return fmt.Errorf("events.PublishCampaignSend: %w", err)
 	}

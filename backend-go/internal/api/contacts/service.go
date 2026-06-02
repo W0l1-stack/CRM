@@ -10,19 +10,24 @@ import (
 
 	"crm-go-api/internal/events"
 	"crm-go-api/internal/models"
+	"crm-go-api/internal/plan"
 )
 
 // ErrValidation indicates invalid input from the caller.
 var ErrValidation = errors.New("validation failed")
 
+// ErrLimitReached re-exports the plan quota error for handler mapping.
+var ErrLimitReached = plan.ErrLimitReached
+
 // Service holds contact business logic and validation.
 type Service struct {
 	repo      *Repository
 	publisher *events.Publisher // nil-safe; emits automation triggers
+	enforcer  *plan.Enforcer    // nil-safe; plan quotas
 }
 
-func NewService(repo *Repository, publisher *events.Publisher) *Service {
-	return &Service{repo: repo, publisher: publisher}
+func NewService(repo *Repository, publisher *events.Publisher, enforcer *plan.Enforcer) *Service {
+	return &Service{repo: repo, publisher: publisher, enforcer: enforcer}
 }
 
 func (s *Service) List(ctx context.Context, accountID uuid.UUID, search, tag string) ([]models.Contact, error) {
@@ -41,6 +46,9 @@ func (s *Service) Create(ctx context.Context, accountID uuid.UUID, c *models.Con
 	if c.Source == nil || strings.TrimSpace(*c.Source) == "" {
 		manual := "manual"
 		c.Source = &manual
+	}
+	if err := s.enforcer.Check(ctx, accountID, "contacts"); err != nil {
+		return nil, err
 	}
 	created, err := s.repo.Create(ctx, accountID, c)
 	if err != nil {

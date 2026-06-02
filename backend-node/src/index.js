@@ -13,6 +13,7 @@ const { startCampaignConsumer } = require('./events/campaigns');
 const { startEmailWorker } = require('./workers/email.worker');
 const { startSmsWorker } = require('./workers/sms.worker');
 const { startAutomationWorker } = require('./workers/automation.worker');
+const { startCampaignWorker } = require('./workers/campaign.worker');
 const twilioWebhook = require('./webhooks/twilio');
 const resendWebhook = require('./webhooks/resend');
 
@@ -44,7 +45,7 @@ startOutboundConsumer();
 startCampaignConsumer();
 
 // BullMQ workers (email, SMS, automation steps).
-const workers = [startEmailWorker(), startSmsWorker(), startAutomationWorker()];
+const workers = [startEmailWorker(), startSmsWorker(), startAutomationWorker(), startCampaignWorker()];
 
 server.listen(config.port, () => {
   logger.info({ port: config.port }, 'Lydia Node real-time service listening');

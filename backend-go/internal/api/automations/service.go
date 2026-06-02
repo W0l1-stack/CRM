@@ -9,10 +9,14 @@ import (
 	"github.com/google/uuid"
 
 	"crm-go-api/internal/models"
+	"crm-go-api/internal/plan"
 )
 
 // ErrValidation indicates invalid input from the caller.
 var ErrValidation = errors.New("validation failed")
+
+// ErrLimitReached re-exports the plan quota error for handler mapping.
+var ErrLimitReached = plan.ErrLimitReached
 
 var validTriggers = map[string]bool{
 	models.TriggerContactCreated:    true,
@@ -29,11 +33,12 @@ var validActions = map[string]bool{
 }
 
 type Service struct {
-	repo *Repository
+	repo     *Repository
+	enforcer *plan.Enforcer
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, enforcer *plan.Enforcer) *Service {
+	return &Service{repo: repo, enforcer: enforcer}
 }
 
 func (s *Service) List(ctx context.Context, accountID uuid.UUID) ([]models.Automation, error) {
@@ -46,6 +51,9 @@ func (s *Service) Get(ctx context.Context, accountID, id uuid.UUID) (*models.Aut
 
 func (s *Service) Create(ctx context.Context, accountID uuid.UUID, a *models.Automation) (*models.Automation, error) {
 	if err := validate(a); err != nil {
+		return nil, err
+	}
+	if err := s.enforcer.Check(ctx, accountID, "automations"); err != nil {
 		return nil, err
 	}
 	return s.repo.Create(ctx, accountID, a)
