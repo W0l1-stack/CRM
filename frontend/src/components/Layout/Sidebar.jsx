@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Users, KanbanSquare, MessageSquare, LayoutDashboard, Zap, CalendarDays } from 'lucide-react';
+import { Users, KanbanSquare, MessageSquare, LayoutDashboard, Zap, CalendarDays, FileText, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const nav = [
@@ -7,8 +7,10 @@ const nav = [
   { to: '/contacts', label: 'Contacts', icon: Users },
   { to: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
   { to: '/conversations', label: 'Conversations', icon: MessageSquare },
+  { to: '/campaigns', label: 'Campaigns', icon: Mail },
   { to: '/automations', label: 'Automations', icon: Zap },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { to: '/forms', label: 'Forms', icon: FileText },
 ];
 
 export default function Sidebar() {

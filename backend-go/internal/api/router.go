@@ -9,9 +9,11 @@ import (
 	"crm-go-api/internal/api/appointments"
 	"crm-go-api/internal/api/auth"
 	"crm-go-api/internal/api/automations"
+	"crm-go-api/internal/api/campaigns"
 	"crm-go-api/internal/api/contacts"
 	"crm-go-api/internal/api/conversations"
 	"crm-go-api/internal/api/deals"
+	"crm-go-api/internal/api/forms"
 	"crm-go-api/internal/api/pipelines"
 	"crm-go-api/internal/config"
 	"crm-go-api/internal/events"
@@ -47,6 +49,14 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	booking.HandleFunc("/{id}", apptHandler.PublicGetType).Methods(http.MethodGet)
 	booking.HandleFunc("/{id}/slots", apptHandler.PublicSlots).Methods(http.MethodGet)
 	booking.HandleFunc("/{id}/book", apptHandler.PublicBook).Methods(http.MethodPost)
+
+	formHandler := forms.NewHandler(forms.NewService(forms.NewRepository(pool), publisher))
+	publicForms := router.PathPrefix("/api/v1/public/forms").Subrouter()
+	publicForms.HandleFunc("/{id}", formHandler.PublicGet).Methods(http.MethodGet)
+	publicForms.HandleFunc("/{id}/submit", formHandler.PublicSubmit).Methods(http.MethodPost)
+
+	campaignHandler := campaigns.NewHandler(campaigns.NewService(campaigns.NewRepository(pool), publisher))
+	router.HandleFunc("/api/v1/public/unsubscribe", campaignHandler.Unsubscribe).Methods(http.MethodGet)
 
 	// ---- Protected routes ----
 	protected := router.PathPrefix("/api/v1").Subrouter()
@@ -86,6 +96,19 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/appointment-types/{id}", apptHandler.DeleteType).Methods(http.MethodDelete)
 	protected.HandleFunc("/appointments", apptHandler.ListAppointments).Methods(http.MethodGet)
 	protected.HandleFunc("/appointments/{id}/status", apptHandler.UpdateStatus).Methods(http.MethodPut)
+
+	protected.HandleFunc("/forms", formHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/forms", formHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/forms/{id}", formHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/forms/{id}", formHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/forms/{id}", formHandler.Delete).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/campaigns", campaignHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/campaigns", campaignHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/campaigns/{id}", campaignHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/campaigns/{id}", campaignHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/campaigns/{id}", campaignHandler.Delete).Methods(http.MethodDelete)
+	protected.HandleFunc("/campaigns/{id}/send", campaignHandler.Send).Methods(http.MethodPost)
 
 	convHandler := conversations.NewHandler(conversations.NewService(conversations.NewRepository(pool), publisher))
 	protected.HandleFunc("/conversations", convHandler.List).Methods(http.MethodGet)

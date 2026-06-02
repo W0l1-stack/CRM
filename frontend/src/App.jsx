@@ -11,6 +11,9 @@ import Conversations from '@/pages/Conversations';
 import Automations from '@/pages/Automations';
 import Calendar from '@/pages/Calendar';
 import Booking from '@/pages/Booking';
+import Forms from '@/pages/Forms';
+import PublicForm from '@/pages/PublicForm';
+import Campaigns from '@/pages/Campaigns';
 
 export default function App() {
   return (
@@ -18,6 +21,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/book/:typeId" element={<Booking />} />
+      <Route path="/form/:id" element={<PublicForm />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<PageWrapper />}>
@@ -28,6 +32,8 @@ export default function App() {
           <Route path="/conversations" element={<Conversations />} />
           <Route path="/automations" element={<Automations />} />
           <Route path="/calendar" element={<Calendar />} />
+          <Route path="/forms" element={<Forms />} />
+          <Route path="/campaigns" element={<Campaigns />} />
         </Route>
       </Route>
     </Routes>
