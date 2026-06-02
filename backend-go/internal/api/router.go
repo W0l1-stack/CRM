@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,7 +24,24 @@ import (
 	"crm-go-api/internal/config"
 	"crm-go-api/internal/events"
 	"crm-go-api/internal/middleware"
+	"crm-go-api/internal/ratelimit"
 )
+
+// clientIP extracts the caller's IP for rate-limit keys (first X-Forwarded-For
+// hop when present, else the remote address).
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
 
 // NewRouter wires every dependency and returns the configured router.
 // Public auth routes live under /api/v1/auth; everything else under /api/v1 is
@@ -30,8 +49,18 @@ import (
 func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publisher) *mux.Router {
 	router := mux.NewRouter()
 
-	router.Use(middleware.CORS)
+	// CORS is applied by wrapping the router in main (so it also covers
+	// preflight OPTIONS requests that match no registered method).
 	router.Use(middleware.Logger)
+
+	limiter := ratelimit.New(cfg.RedisURL)
+	byIP := func(r *http.Request) string { return clientIP(r) }
+	byAccount := func(r *http.Request) string {
+		if id, ok := middleware.AccountID(r.Context()); ok {
+			return id.String()
+		}
+		return clientIP(r)
+	}
 
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -43,6 +72,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 		auth.NewService(auth.NewRepository(pool), cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL),
 	)
 	public := router.PathPrefix("/api/v1/auth").Subrouter()
+	public.Use(limiter.Middleware(30, time.Minute, byIP)) // throttle auth abuse per IP
 	public.HandleFunc("/register", authHandler.Register).Methods(http.MethodPost)
 	public.HandleFunc("/login", authHandler.Login).Methods(http.MethodPost)
 	public.HandleFunc("/refresh", authHandler.Refresh).Methods(http.MethodPost)
@@ -74,6 +104,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected := router.PathPrefix("/api/v1").Subrouter()
 	protected.Use(middleware.Auth(cfg.JWTSecret))
 	protected.Use(middleware.RequireTenant)
+	protected.Use(limiter.Middleware(600, time.Minute, byAccount)) // per-account API budget
 	// Block mutating requests once a trial has expired (billing routes exempt).
 	protected.Use(middleware.TrialGuard(func(ctx context.Context, accountID uuid.UUID) (string, *time.Time, error) {
 		acc, err := billingRepo.GetAccount(ctx, accountID)
