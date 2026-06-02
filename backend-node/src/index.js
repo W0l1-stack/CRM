@@ -8,6 +8,7 @@ const logger = require('./logger');
 const { initSocket } = require('./socket/server');
 const { startEventSubscriber } = require('./events/subscriber');
 const { startTriggerConsumer } = require('./events/triggers');
+const { startOutboundConsumer } = require('./events/outbound');
 const { startEmailWorker } = require('./workers/email.worker');
 const { startSmsWorker } = require('./workers/sms.worker');
 const { startAutomationWorker } = require('./workers/automation.worker');
@@ -34,6 +35,9 @@ startEventSubscriber();
 
 // Run automations off the Go API's trigger channel.
 startTriggerConsumer();
+
+// Send outbound messages requested by the Go API.
+startOutboundConsumer();
 
 // BullMQ workers (email, SMS, automation steps).
 const workers = [startEmailWorker(), startSmsWorker(), startAutomationWorker()];

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"crm-go-api/internal/events"
 	"crm-go-api/internal/models"
 )
 
@@ -16,11 +17,12 @@ var ErrValidation = errors.New("validation failed")
 
 // Service holds deal business logic and validation.
 type Service struct {
-	repo *Repository
+	repo      *Repository
+	publisher *events.Publisher // nil-safe
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, publisher *events.Publisher) *Service {
+	return &Service{repo: repo, publisher: publisher}
 }
 
 func (s *Service) List(ctx context.Context, accountID uuid.UUID, pipelineID *uuid.UUID) ([]models.Deal, error) {
@@ -42,7 +44,26 @@ func (s *Service) Update(ctx context.Context, accountID, id uuid.UUID, d *models
 	if err := validate(d); err != nil {
 		return nil, err
 	}
-	return s.repo.Update(ctx, accountID, id, d)
+
+	// Capture the prior stage so we can detect a move.
+	prev, err := s.repo.GetByID(ctx, accountID, id)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.Update(ctx, accountID, id, d)
+	if err != nil {
+		return nil, err
+	}
+
+	if prev.StageID != updated.StageID {
+		_ = s.publisher.PublishTrigger(ctx, accountID, models.TriggerDealMoved, map[string]interface{}{
+			"deal":           updated,
+			"from_stage_id":  prev.StageID,
+			"to_stage_id":    updated.StageID,
+		})
+	}
+	return updated, nil
 }
 
 func (s *Service) Delete(ctx context.Context, accountID, id uuid.UUID) error {

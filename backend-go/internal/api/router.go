@@ -67,7 +67,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/pipelines", pipelineHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/pipelines/{id}", pipelineHandler.Get).Methods(http.MethodGet)
 
-	dealHandler := deals.NewHandler(deals.NewService(deals.NewRepository(pool)))
+	dealHandler := deals.NewHandler(deals.NewService(deals.NewRepository(pool), publisher))
 	protected.HandleFunc("/deals", dealHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/deals", dealHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/deals/{id}", dealHandler.Get).Methods(http.MethodGet)
@@ -87,7 +87,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/appointments", apptHandler.ListAppointments).Methods(http.MethodGet)
 	protected.HandleFunc("/appointments/{id}/status", apptHandler.UpdateStatus).Methods(http.MethodPut)
 
-	convHandler := conversations.NewHandler(conversations.NewService(conversations.NewRepository(pool)))
+	convHandler := conversations.NewHandler(conversations.NewService(conversations.NewRepository(pool), publisher))
 	protected.HandleFunc("/conversations", convHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/conversations", convHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/conversations/{id}", convHandler.Get).Methods(http.MethodGet)

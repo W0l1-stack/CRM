@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"crm-go-api/internal/events"
 	"crm-go-api/internal/models"
 )
 
@@ -20,11 +21,12 @@ var validDirections = map[string]bool{"inbound": true, "outbound": true}
 
 // Service holds conversation/message business logic and validation.
 type Service struct {
-	repo *Repository
+	repo      *Repository
+	publisher *events.Publisher // nil-safe
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, publisher *events.Publisher) *Service {
+	return &Service{repo: repo, publisher: publisher}
 }
 
 func (s *Service) ListConversations(ctx context.Context, accountID uuid.UUID, status string) ([]models.Conversation, error) {
@@ -74,5 +76,20 @@ func (s *Service) CreateMessage(ctx context.Context, accountID, conversationID u
 	if !validDirections[m.Direction] {
 		return nil, fmt.Errorf("conversations.CreateMessage: %w: direction must be inbound or outbound", ErrValidation)
 	}
-	return s.repo.CreateMessage(ctx, accountID, m)
+
+	// Outbound email/SMS must actually be delivered: mark it queued and hand
+	// the send off to the Node workers. Notes and inbound messages just record.
+	needsSend := m.Direction == "outbound" && (m.Channel == "email" || m.Channel == "sms")
+	if needsSend && m.Status == "" {
+		m.Status = "queued"
+	}
+
+	created, err := s.repo.CreateMessage(ctx, accountID, m)
+	if err != nil {
+		return nil, err
+	}
+	if needsSend {
+		_ = s.publisher.PublishOutbound(ctx, accountID, created.ID)
+	}
+	return created, nil
 }

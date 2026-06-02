@@ -1,5 +1,6 @@
 const { subscriber } = require('../redis/client');
 const { runTrigger } = require('../automation/engine');
+const { handleAppointmentBooked } = require('../automation/appointmentBuiltins');
 const logger = require('../logger');
 
 const TRIGGER_CHANNEL = 'lydia:triggers';
@@ -20,6 +21,11 @@ function startTriggerConsumer() {
     if (channel !== TRIGGER_CHANNEL) return;
     try {
       const { account_id: accountID, trigger_type: triggerType, payload } = JSON.parse(message);
+      // Built-in handling for booking confirmations/reminders, in addition to
+      // any user-defined automations on this trigger.
+      if (triggerType === 'appointment_booked') {
+        await handleAppointmentBooked(accountID, payload);
+      }
       await runTrigger({ accountID, triggerType, payload });
     } catch (err) {
       logger.error({ err: err.message }, 'trigger handling failed');

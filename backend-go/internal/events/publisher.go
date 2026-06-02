@@ -16,6 +16,10 @@ import (
 // on. Each message carries its own account_id, so one channel serves all tenants.
 const TriggerChannel = "lydia:triggers"
 
+// OutboundChannel carries outbound message send requests. Node resolves the
+// recipient and enqueues the actual email/SMS send onto BullMQ.
+const OutboundChannel = "lydia:outbound"
+
 // Publisher publishes to Redis. A nil *Publisher is a valid no-op, so callers
 // don't have to branch when Redis isn't configured.
 type Publisher struct {
@@ -62,6 +66,21 @@ func (p *Publisher) PublishTrigger(ctx context.Context, accountID uuid.UUID, tri
 	}
 	if err := p.rdb.Publish(ctx, TriggerChannel, body).Err(); err != nil {
 		return fmt.Errorf("events.PublishTrigger: %w", err)
+	}
+	return nil
+}
+
+// PublishOutbound asks the Node service to send a stored outbound message.
+func (p *Publisher) PublishOutbound(ctx context.Context, accountID, messageID uuid.UUID) error {
+	if p == nil {
+		return nil
+	}
+	body, err := json.Marshal(map[string]interface{}{"account_id": accountID, "message_id": messageID})
+	if err != nil {
+		return fmt.Errorf("events.PublishOutbound: %w", err)
+	}
+	if err := p.rdb.Publish(ctx, OutboundChannel, body).Err(); err != nil {
+		return fmt.Errorf("events.PublishOutbound: %w", err)
 	}
 	return nil
 }
