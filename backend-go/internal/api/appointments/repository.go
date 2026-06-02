@@ -177,6 +177,22 @@ func (r *Repository) UpdateStatus(ctx context.Context, accountID, id uuid.UUID, 
 	return a, nil
 }
 
+// AccountTimezone returns the account's IANA timezone (defaults to UTC).
+func (r *Repository) AccountTimezone(ctx context.Context, accountID uuid.UUID) (string, error) {
+	var tz *string
+	err := r.db.QueryRow(ctx, `SELECT timezone FROM accounts WHERE id = $1`, accountID).Scan(&tz)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "UTC", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("appointments.AccountTimezone: %w", err)
+	}
+	if tz == nil || *tz == "" {
+		return "UTC", nil
+	}
+	return *tz, nil
+}
+
 // FindOrCreateContact resolves a booking's contact by email within the account,
 // creating one (source = 'booking') if needed.
 func (r *Repository) FindOrCreateContact(ctx context.Context, accountID uuid.UUID, name, email, phone string) (uuid.UUID, error) {

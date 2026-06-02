@@ -86,8 +86,15 @@ func (s *Service) AvailableSlots(ctx context.Context, id uuid.UUID, date time.Ti
 		return nil, nil, err
 	}
 
-	dayStart := time.Date(date.Year(), date.Month(), date.Day(), dayStartHour, 0, 0, 0, time.UTC)
-	dayEnd := time.Date(date.Year(), date.Month(), date.Day(), dayEndHour, 0, 0, 0, time.UTC)
+	// Generate slots within business hours in the account's timezone.
+	loc := time.UTC
+	if tzName, err := s.repo.AccountTimezone(ctx, t.AccountID); err == nil {
+		if l, err := time.LoadLocation(tzName); err == nil {
+			loc = l
+		}
+	}
+	dayStart := time.Date(date.Year(), date.Month(), date.Day(), dayStartHour, 0, 0, 0, loc)
+	dayEnd := time.Date(date.Year(), date.Month(), date.Day(), dayEndHour, 0, 0, 0, loc)
 
 	taken, err := s.repo.AppointmentsBetween(ctx, t.AccountID, t.ID, dayStart, dayEnd)
 	if err != nil {
