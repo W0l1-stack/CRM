@@ -151,6 +151,17 @@ func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (*AuthRes
 	return &AuthResult{User: user, Tokens: tokens}, nil
 }
 
+// IssueFor mints a fresh access/refresh pair for a user without a password
+// check. Callers must authorize the caller separately (e.g. an agency owner
+// switching into a sub-account they own).
+func (s *Service) IssueFor(ctx context.Context, user *models.User) (*AuthResult, error) {
+	tokens, err := s.issueTokens(ctx, user)
+	if err != nil {
+		return nil, fmt.Errorf("IssueFor: %w", err)
+	}
+	return &AuthResult{User: user, Tokens: tokens}, nil
+}
+
 // issueTokens signs an access token and stores a new refresh token.
 func (s *Service) issueTokens(ctx context.Context, user *models.User) (Tokens, error) {
 	access, err := token.IssueAccessToken(s.jwtSecret, user.AccountID, user.ID, user.Role, s.accessTokenTTL)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"crm-go-api/internal/api/googlecal"
 	"crm-go-api/internal/events"
 	"crm-go-api/internal/models"
 )
@@ -26,10 +27,11 @@ const (
 type Service struct {
 	repo      *Repository
 	publisher *events.Publisher
+	cal       *googlecal.Service // nil-safe; two-way Google Calendar sync
 }
 
-func NewService(repo *Repository, publisher *events.Publisher) *Service {
-	return &Service{repo: repo, publisher: publisher}
+func NewService(repo *Repository, publisher *events.Publisher, cal *googlecal.Service) *Service {
+	return &Service{repo: repo, publisher: publisher, cal: cal}
 }
 
 // ---- Appointment types ----
@@ -105,14 +107,39 @@ func (s *Service) AvailableSlots(ctx context.Context, id uuid.UUID, date time.Ti
 		takenSet[a.StartsAt.UTC().Unix()] = true
 	}
 
+	// Pull busy intervals from the connected Google Calendar (if any) so a slot
+	// the user is already booked for elsewhere isn't offered. Failures are
+	// non-fatal — we fall back to DB-only availability.
+	var busy []googlecal.Interval
+	if s.cal != nil {
+		if b, err := s.cal.FreeBusy(ctx, t.AccountID, dayStart, dayEnd); err == nil {
+			busy = b
+		}
+	}
+
 	step := time.Duration(t.DurationMinutes) * time.Minute
 	slots := []time.Time{}
 	for slot := dayStart; slot.Add(step).Compare(dayEnd) <= 0; slot = slot.Add(step) {
-		if !takenSet[slot.Unix()] {
-			slots = append(slots, slot)
+		if takenSet[slot.Unix()] {
+			continue
 		}
+		slotEnd := slot.Add(step)
+		if overlapsBusy(slot, slotEnd, busy) {
+			continue
+		}
+		slots = append(slots, slot)
 	}
 	return t, slots, nil
+}
+
+// overlapsBusy reports whether [start,end) intersects any busy interval.
+func overlapsBusy(start, end time.Time, busy []googlecal.Interval) bool {
+	for _, b := range busy {
+		if start.Before(b.End) && end.After(b.Start) {
+			return true
+		}
+	}
+	return false
 }
 
 // BookInput is a public booking request.
@@ -157,6 +184,18 @@ func (s *Service) Book(ctx context.Context, typeID uuid.UUID, in BookInput) (*mo
 	created, err := s.repo.CreateAppointment(ctx, t.AccountID, appt)
 	if err != nil {
 		return nil, err
+	}
+
+	// Two-way sync: mirror the booking onto the connected Google Calendar so the
+	// slot is blocked there too. Best-effort — a sync failure must not fail the
+	// booking the customer just made.
+	if s.cal != nil {
+		summary := t.Name + " with " + in.Name
+		desc := "Booked via Lydia CRM"
+		if eventID, cerr := s.cal.CreateEvent(ctx, t.AccountID, summary, desc, created.StartsAt, created.EndsAt, in.Email); cerr == nil && eventID != "" {
+			_ = s.repo.SetGoogleEvent(ctx, t.AccountID, created.ID, eventID)
+			created.GoogleEventID = &eventID
+		}
 	}
 
 	_ = s.publisher.PublishTrigger(ctx, t.AccountID, models.TriggerAppointmentBooked, map[string]interface{}{

@@ -142,6 +142,33 @@ func (r *Repository) Delete(ctx context.Context, accountID, id uuid.UUID) error 
 	return nil
 }
 
+// ListRecipients returns per-contact send/open/click rows for a campaign,
+// joined to the contact for display. Newest activity first.
+func (r *Repository) ListRecipients(ctx context.Context, accountID, campaignID uuid.UUID) ([]models.CampaignRecipient, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT cr.id, cr.campaign_id, cr.contact_id, COALESCE(ct.name, ''), cr.email,
+		        cr.status, cr.sent_at, cr.opened_at, cr.clicked_at
+		   FROM campaign_recipients cr
+		   LEFT JOIN contacts ct ON ct.id = cr.contact_id
+		  WHERE cr.account_id = $1 AND cr.campaign_id = $2
+		  ORDER BY cr.clicked_at DESC NULLS LAST, cr.opened_at DESC NULLS LAST, cr.sent_at DESC`,
+		accountID, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf("campaigns.ListRecipients: %w", err)
+	}
+	defer rows.Close()
+	out := []models.CampaignRecipient{}
+	for rows.Next() {
+		var rec models.CampaignRecipient
+		if err := rows.Scan(&rec.ID, &rec.CampaignID, &rec.ContactID, &rec.ContactName, &rec.Email,
+			&rec.Status, &rec.SentAt, &rec.OpenedAt, &rec.ClickedAt); err != nil {
+			return nil, fmt.Errorf("campaigns.ListRecipients: scan: %w", err)
+		}
+		out = append(out, rec)
+	}
+	return out, rows.Err()
+}
+
 // Unsubscribe flags a contact as unsubscribed (used by the public unsubscribe link).
 func (r *Repository) Unsubscribe(ctx context.Context, accountID, contactID uuid.UUID) error {
 	_, err := r.db.Exec(ctx, `UPDATE contacts SET is_unsubscribed = TRUE, updated_at = NOW() WHERE account_id = $1 AND id = $2`, accountID, contactID)

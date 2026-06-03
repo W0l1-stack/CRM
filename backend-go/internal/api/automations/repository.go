@@ -25,15 +25,18 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-const cols = `id, account_id, name, is_active, trigger_type, trigger_config, actions, created_at, updated_at`
+const cols = `id, account_id, name, is_active, trigger_types, trigger_config, actions, created_at, updated_at`
 
 func scan(row pgx.Row) (*models.Automation, error) {
 	var a models.Automation
 	var triggerRaw, actionsRaw []byte
 	if err := row.Scan(
-		&a.ID, &a.AccountID, &a.Name, &a.IsActive, &a.TriggerType, &triggerRaw, &actionsRaw, &a.CreatedAt, &a.UpdatedAt,
+		&a.ID, &a.AccountID, &a.Name, &a.IsActive, &a.TriggerTypes, &triggerRaw, &actionsRaw, &a.CreatedAt, &a.UpdatedAt,
 	); err != nil {
 		return nil, err
+	}
+	if a.TriggerTypes == nil {
+		a.TriggerTypes = []string{}
 	}
 	if len(triggerRaw) > 0 {
 		_ = json.Unmarshal(triggerRaw, &a.TriggerConfig)
@@ -81,11 +84,12 @@ func (r *Repository) GetByID(ctx context.Context, accountID, id uuid.UUID) (*mod
 	return a, nil
 }
 
-// ListActiveByTrigger returns active automations for a trigger type — used by
-// the engine. Scoped by account_id.
+// ListActiveByTrigger returns active automations that fire on the given trigger
+// type — used by the engine. Matches when the trigger is one of the
+// automation's trigger_types. Scoped by account_id.
 func (r *Repository) ListActiveByTrigger(ctx context.Context, accountID uuid.UUID, triggerType string) ([]models.Automation, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT `+cols+` FROM automations WHERE account_id = $1 AND is_active = TRUE AND trigger_type = $2`,
+		`SELECT `+cols+` FROM automations WHERE account_id = $1 AND is_active = TRUE AND $2 = ANY(trigger_types)`,
 		accountID, triggerType)
 	if err != nil {
 		return nil, fmt.Errorf("automations.ListActiveByTrigger: %w", err)
@@ -109,9 +113,9 @@ func (r *Repository) Create(ctx context.Context, accountID uuid.UUID, a *models.
 		return nil, fmt.Errorf("automations.Create: encode actions: %w", err)
 	}
 	row := r.db.QueryRow(ctx,
-		`INSERT INTO automations (account_id, name, is_active, trigger_type, trigger_config, actions)
+		`INSERT INTO automations (account_id, name, is_active, trigger_types, trigger_config, actions)
 		 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb) RETURNING `+cols,
-		accountID, a.Name, a.IsActive, a.TriggerType, string(triggerJSON), string(actionsJSON))
+		accountID, a.Name, a.IsActive, orEmptyTriggers(a.TriggerTypes), string(triggerJSON), string(actionsJSON))
 	created, err := scan(row)
 	if err != nil {
 		return nil, fmt.Errorf("automations.Create: %w", err)
@@ -126,10 +130,10 @@ func (r *Repository) Update(ctx context.Context, accountID, id uuid.UUID, a *mod
 		return nil, fmt.Errorf("automations.Update: encode actions: %w", err)
 	}
 	row := r.db.QueryRow(ctx,
-		`UPDATE automations SET name = $3, is_active = $4, trigger_type = $5,
+		`UPDATE automations SET name = $3, is_active = $4, trigger_types = $5,
 		   trigger_config = $6::jsonb, actions = $7::jsonb, updated_at = NOW()
 		 WHERE account_id = $1 AND id = $2 RETURNING `+cols,
-		accountID, id, a.Name, a.IsActive, a.TriggerType, string(triggerJSON), string(actionsJSON))
+		accountID, id, a.Name, a.IsActive, orEmptyTriggers(a.TriggerTypes), string(triggerJSON), string(actionsJSON))
 	updated, err := scan(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -163,4 +167,11 @@ func orEmptyActions(a []models.AutomationAction) []models.AutomationAction {
 		return []models.AutomationAction{}
 	}
 	return a
+}
+
+func orEmptyTriggers(t []string) []string {
+	if t == nil {
+		return []string{}
+	}
+	return t
 }

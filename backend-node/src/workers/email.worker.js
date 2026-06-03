@@ -19,8 +19,12 @@ function startEmailWorker() {
 
       if (!resend) throw new Error('RESEND_API_KEY not configured');
 
-      const { to, subject, html, messageId } = data;
-      const result = await resend.emails.send({ from: config.resendFrom, to, subject, html });
+      const { to, subject, html, messageId, tags } = data;
+      const payload = { from: config.resendFrom, to, subject, html };
+      // Tags (campaign_id, contact_id) let the Resend webhook attribute
+      // opens/clicks back to a specific campaign recipient.
+      if (Array.isArray(tags) && tags.length > 0) payload.tags = tags;
+      const result = await resend.emails.send(payload);
       const externalId = result?.data?.id || null;
 
       if (messageId) {

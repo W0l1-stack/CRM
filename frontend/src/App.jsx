@@ -9,13 +9,16 @@ import ContactDetail from '@/pages/ContactDetail';
 import Pipeline from '@/pages/Pipeline';
 import Conversations from '@/pages/Conversations';
 import Automations from '@/pages/Automations';
+import AutomationBuilder from '@/pages/AutomationBuilder';
 import Calendar from '@/pages/Calendar';
 import Booking from '@/pages/Booking';
 import Forms from '@/pages/Forms';
 import PublicForm from '@/pages/PublicForm';
 import Campaigns from '@/pages/Campaigns';
+import CampaignDetail from '@/pages/CampaignDetail';
 import Billing from '@/pages/Billing';
 import Settings from '@/pages/Settings';
+import Agency from '@/pages/Agency';
 
 export default function App() {
   return (
@@ -33,11 +36,15 @@ export default function App() {
           <Route path="/pipeline" element={<Pipeline />} />
           <Route path="/conversations" element={<Conversations />} />
           <Route path="/automations" element={<Automations />} />
+          <Route path="/automations/new" element={<AutomationBuilder />} />
+          <Route path="/automations/:id" element={<AutomationBuilder />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/forms" element={<Forms />} />
           <Route path="/campaigns" element={<Campaigns />} />
+          <Route path="/campaigns/:id" element={<CampaignDetail />} />
           <Route path="/billing" element={<Billing />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/agency" element={<Agency />} />
         </Route>
       </Route>
     </Routes>

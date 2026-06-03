@@ -1,3 +1,4 @@
+import { cloneElement, isValidElement } from 'react';
 import { cva } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
@@ -24,8 +25,17 @@ const buttonVariants = cva(
   }
 );
 
-export function Button({ className, variant, size, ...props }) {
-  return <button className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+export function Button({ className, variant, size, asChild = false, ...props }) {
+  const classes = cn(buttonVariants({ variant, size, className }));
+  // asChild renders the single child (e.g. a <Link>) with button styles merged,
+  // so we can style router links as buttons without nesting <a> inside <button>.
+  if (asChild && isValidElement(props.children)) {
+    const child = props.children;
+    return cloneElement(child, {
+      className: cn(classes, child.props.className),
+    });
+  }
+  return <button className={classes} {...props} />;
 }
 
 export { buttonVariants };

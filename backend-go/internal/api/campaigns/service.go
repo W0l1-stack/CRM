@@ -101,6 +101,15 @@ func (s *Service) Unsubscribe(ctx context.Context, accountID, contactID uuid.UUI
 	return s.repo.Unsubscribe(ctx, accountID, contactID)
 }
 
+// Recipients returns per-contact open/click tracking for a campaign. It first
+// confirms the campaign belongs to the account.
+func (s *Service) Recipients(ctx context.Context, accountID, campaignID uuid.UUID) ([]models.CampaignRecipient, error) {
+	if _, err := s.repo.GetByID(ctx, accountID, campaignID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListRecipients(ctx, accountID, campaignID)
+}
+
 func validate(c *models.Campaign) error {
 	c.Name = strings.TrimSpace(c.Name)
 	c.Subject = strings.TrimSpace(c.Subject)

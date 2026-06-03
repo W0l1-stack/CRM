@@ -23,6 +23,9 @@ type Config struct {
 	StripePriceStarter string
 	StripePricePro     string
 	FrontendURL        string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURL  string
 }
 
 // Load reads configuration from the environment and validates required values.
@@ -43,6 +46,9 @@ func Load() (*Config, error) {
 		StripePriceStarter: os.Getenv("STRIPE_PRICE_STARTER"),
 		StripePricePro:     os.Getenv("STRIPE_PRICE_PRO"),
 		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:3000"),
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:3001/api/v1/integrations/google/callback"),
 	}
 
 	if cfg.DatabaseURL == "" {

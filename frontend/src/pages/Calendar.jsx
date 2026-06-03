@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { Plus, Trash2, Copy, CalendarClock } from 'lucide-react';
+import { Plus, Trash2, Copy, CalendarClock, CalendarDays, CheckCircle2 } from 'lucide-react';
 import {
   useAppointmentTypes,
   useCreateAppointmentType,
@@ -8,11 +9,13 @@ import {
   useAppointments,
   useUpdateAppointmentStatus,
 } from '@/hooks/useAppointments';
+import { useGoogleStatus, useConnectGoogle, useDisconnectGoogle } from '@/hooks/useGoogleCalendar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { toast } from '@/store/toast.store';
 
 const selectClass = 'flex h-9 rounded-md border border-input bg-background px-2 text-sm';
 
@@ -23,6 +26,18 @@ export default function Calendar() {
   const deleteType = useDeleteAppointmentType();
   const updateStatus = useUpdateAppointmentStatus();
   const [form, setForm] = useState({ name: '', duration_minutes: 30 });
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Surface the OAuth redirect result, then clean the URL.
+  useEffect(() => {
+    const g = searchParams.get('google');
+    if (!g) return;
+    if (g === 'connected') toast.success('Google Calendar connected');
+    else if (g === 'denied') toast.error('Google connection was denied');
+    else if (g === 'error') toast.error('Google connection failed');
+    searchParams.delete('google');
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const submit = (e) => {
     e.preventDefault();
@@ -37,6 +52,8 @@ export default function Calendar() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Calendar</h1>
+
+      <GoogleCalendarCard />
 
       <Card>
         <CardHeader>
@@ -140,5 +157,52 @@ export default function Calendar() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function GoogleCalendarCard() {
+  const { data: status, isLoading } = useGoogleStatus();
+  const connect = useConnectGoogle();
+  const disconnect = useDisconnectGoogle();
+
+  const connected = status?.connected;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CalendarDays className="h-4 w-4" /> Google Calendar
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Checking connection…</p>
+        ) : connected ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>
+                Connected{status.email ? ` as ${status.email}` : ''}. Booked slots sync both ways and busy times are
+                blocked automatically.
+              </span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
+              Disconnect
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Connect your Google Calendar so Lydia shows your real availability and blocks booked slots on both
+              calendars.
+            </p>
+            <Button onClick={() => connect.mutate()} disabled={connect.isPending || status?.configured === false}>
+              <CalendarDays className="h-4 w-4" />
+              {status?.configured === false ? 'Not configured' : connect.isPending ? 'Redirecting…' : 'Connect Google Calendar'}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

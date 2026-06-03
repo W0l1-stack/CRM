@@ -75,9 +75,22 @@ func validate(a *models.Automation) error {
 	if a.Name == "" {
 		return fmt.Errorf("automations.validate: %w: name is required", ErrValidation)
 	}
-	if !validTriggers[a.TriggerType] {
-		return fmt.Errorf("automations.validate: %w: invalid trigger_type", ErrValidation)
+	if len(a.TriggerTypes) == 0 {
+		return fmt.Errorf("automations.validate: %w: at least one trigger is required", ErrValidation)
 	}
+	seen := make(map[string]bool, len(a.TriggerTypes))
+	deduped := a.TriggerTypes[:0]
+	for _, t := range a.TriggerTypes {
+		if !validTriggers[t] {
+			return fmt.Errorf("automations.validate: %w: invalid trigger %q", ErrValidation, t)
+		}
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
+		deduped = append(deduped, t)
+	}
+	a.TriggerTypes = deduped
 	for i, act := range a.Actions {
 		if !validActions[act.Type] {
 			return fmt.Errorf("automations.validate: %w: action %d has invalid type %q", ErrValidation, i, act.Type)

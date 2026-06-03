@@ -21,13 +21,14 @@ type AutomationAction struct {
 	Config map[string]interface{} `json:"config"`
 }
 
-// Automation is a "when X happens, do Y" workflow.
+// Automation is a "when X happens, do Y" workflow. It fires when an incoming
+// event matches any of its TriggerTypes.
 type Automation struct {
 	ID            uuid.UUID              `json:"id"`
 	AccountID     uuid.UUID              `json:"account_id"`
 	Name          string                 `json:"name"`
 	IsActive      bool                   `json:"is_active"`
-	TriggerType   string                 `json:"trigger_type"`
+	TriggerTypes  []string               `json:"trigger_types"`
 	TriggerConfig map[string]interface{} `json:"trigger_config"`
 	Actions       []AutomationAction     `json:"actions"`
 	CreatedAt     time.Time              `json:"created_at"`

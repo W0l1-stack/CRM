@@ -1,10 +1,15 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { KanbanSquare } from 'lucide-react';
 import { usePipelines, useCreatePipeline } from '@/hooks/usePipelines';
 import { useDeals, useCreateDeal, useUpdateDeal } from '@/hooks/useDeals';
 import { useContacts } from '@/hooks/useContacts';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { PageSpinner } from '@/components/ui/spinner';
+import EmptyState from '@/components/EmptyState';
+import { cn } from '@/lib/utils';
 
 const DEFAULT_STAGES = [
   { id: 'new', name: 'New Lead', order: 1 },
@@ -17,19 +22,25 @@ export default function Pipeline() {
   const { data: pipelines = [], isLoading } = usePipelines();
   const createPipeline = useCreatePipeline();
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <PageSpinner label="Loading pipeline…" />;
 
   if (pipelines.length === 0) {
     return (
-      <div className="flex flex-col items-start gap-3">
+      <div className="space-y-4">
         <h1 className="text-2xl font-semibold">Pipeline</h1>
-        <p className="text-sm text-muted-foreground">No pipeline yet. Create a default sales pipeline to start.</p>
-        <Button
-          disabled={createPipeline.isPending}
-          onClick={() => createPipeline.mutate({ name: 'Sales Pipeline', stages: DEFAULT_STAGES })}
-        >
-          {createPipeline.isPending ? 'Creating…' : 'Create Sales Pipeline'}
-        </Button>
+        <EmptyState
+          icon={KanbanSquare}
+          title="Create a pipeline to organize deals"
+          description="A pipeline groups your deals into stages like New Lead → Proposal → Won so nothing falls through the cracks."
+          action={
+            <Button
+              disabled={createPipeline.isPending}
+              onClick={() => createPipeline.mutate({ name: 'Sales Pipeline', stages: DEFAULT_STAGES })}
+            >
+              {createPipeline.isPending ? 'Creating…' : 'Create Sales Pipeline'}
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -38,13 +49,27 @@ export default function Pipeline() {
 }
 
 function Board({ pipeline }) {
+  const qc = useQueryClient();
   const { data: deals = [] } = useDeals({ pipelineId: pipeline.id });
   const updateDeal = useUpdateDeal();
   const stages = [...(pipeline.stages || [])].sort((a, b) => a.order - b.order);
+  const [dragId, setDragId] = useState(null);
+  const [overStage, setOverStage] = useState(null);
+
+  const dealsKey = ['deals', { pipelineId: pipeline.id }];
 
   const onDrop = (stageId, dealId) => {
+    setOverStage(null);
+    setDragId(null);
     const deal = deals.find((d) => d.id === dealId);
     if (!deal || deal.stage_id === stageId) return;
+
+    // Optimistically move the card so the board feels instant; React Query
+    // reconciles on success and the hook rolls back via invalidation on error.
+    qc.setQueryData(dealsKey, (prev = []) =>
+      prev.map((d) => (d.id === dealId ? { ...d, stage_id: stageId } : d))
+    );
+
     updateDeal.mutate({
       id: deal.id,
       pipeline_id: deal.pipeline_id,
@@ -74,8 +99,17 @@ function Board({ pipeline }) {
           return (
             <div
               key={stage.id}
-              className="flex w-72 shrink-0 flex-col rounded-lg bg-muted/50 p-3"
-              onDragOver={(e) => e.preventDefault()}
+              className={cn(
+                'flex w-72 shrink-0 flex-col rounded-lg border-2 border-transparent bg-muted/50 p-3 transition-colors',
+                overStage === stage.id && 'border-primary/50 bg-primary/5'
+              )}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (overStage !== stage.id) setOverStage(stage.id);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) setOverStage(null);
+              }}
               onDrop={(e) => onDrop(stage.id, e.dataTransfer.getData('dealId'))}
             >
               <div className="mb-3 flex items-center justify-between">
@@ -89,13 +123,29 @@ function Board({ pipeline }) {
                   <Card
                     key={deal.id}
                     draggable
-                    onDragStart={(e) => e.dataTransfer.setData('dealId', deal.id)}
-                    className="cursor-grab p-3 active:cursor-grabbing"
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('dealId', deal.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDragId(deal.id);
+                    }}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setOverStage(null);
+                    }}
+                    className={cn(
+                      'cursor-grab p-3 transition-all active:cursor-grabbing hover:shadow-md',
+                      dragId === deal.id && 'opacity-50'
+                    )}
                   >
                     <p className="text-sm font-medium">{deal.name}</p>
                     <p className="text-xs text-muted-foreground">${Number(deal.value || 0).toLocaleString()}</p>
                   </Card>
                 ))}
+                {stageDeals.length === 0 && (
+                  <div className="rounded-md border border-dashed py-6 text-center text-xs text-muted-foreground">
+                    Drop deals here
+                  </div>
+                )}
               </div>
             </div>
           );

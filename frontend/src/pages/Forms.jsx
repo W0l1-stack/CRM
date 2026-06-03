@@ -4,6 +4,8 @@ import { useForms, useCreateForm, useDeleteForm } from '@/hooks/useForms';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardsSkeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
 
 const selectClass = 'flex h-10 rounded-md border border-input bg-background px-2 text-sm';
 const FIELD_TYPES = ['text', 'email', 'tel', 'textarea'];
@@ -29,14 +31,19 @@ export default function Forms() {
       {showCreate && <CreateFormForm onDone={() => setShowCreate(false)} />}
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <CardsSkeleton count={3} />
       ) : forms.length === 0 ? (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            No forms yet. Create one to capture leads — submissions auto-create contacts and fire the
-            <span className="font-medium"> form_submitted </span> automation trigger.
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={FileText}
+          title="Capture leads with a form"
+          description="Build a form, embed it on any site with one line of code. Submissions auto-create a contact and can fire an automation."
+          action={
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" />
+              New form
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-3">
           {forms.map((f) => (

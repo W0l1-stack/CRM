@@ -166,6 +166,30 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, c, nil)
 }
 
+// Recipients handles GET /campaigns/{id}/recipients — per-contact open/click status.
+func (h *Handler) Recipients(w http.ResponseWriter, r *http.Request) {
+	accountID, ok := middleware.AccountID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", "no tenant context")
+		return
+	}
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "invalid campaign id")
+		return
+	}
+	recipients, err := h.svc.Recipients(r.Context(), accountID, id)
+	if errors.Is(err, ErrNotFound) {
+		response.Error(w, http.StatusNotFound, "not_found", "campaign not found")
+		return
+	}
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal_error", "could not load recipients")
+		return
+	}
+	response.JSON(w, http.StatusOK, recipients, map[string]interface{}{"count": len(recipients)})
+}
+
 type scheduleRequest struct {
 	ScheduledAt string `json:"scheduled_at"`
 }

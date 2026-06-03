@@ -18,7 +18,7 @@ async function runTrigger({ accountID, triggerType, payload }) {
 
   const { rows } = await pool.query(
     `SELECT id, name, actions FROM automations
-      WHERE account_id = $1 AND is_active = TRUE AND trigger_type = $2`,
+      WHERE account_id = $1 AND is_active = TRUE AND $2 = ANY(trigger_types)`,
     [accountID, triggerType]
   );
 

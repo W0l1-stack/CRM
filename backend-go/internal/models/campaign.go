@@ -22,3 +22,17 @@ type Campaign struct {
 	CreatedAt       time.Time              `json:"created_at"`
 	UpdatedAt       time.Time              `json:"updated_at"`
 }
+
+// CampaignRecipient is one contact a campaign was sent to, with per-contact
+// open/click tracking populated from Resend webhook events.
+type CampaignRecipient struct {
+	ID          uuid.UUID  `json:"id"`
+	CampaignID  uuid.UUID  `json:"campaign_id"`
+	ContactID   uuid.UUID  `json:"contact_id"`
+	ContactName string     `json:"contact_name"`
+	Email       string     `json:"email"`
+	Status      string     `json:"status"` // sent, delivered, opened, clicked, bounced, unsubscribed
+	SentAt      *time.Time `json:"sent_at"`
+	OpenedAt    *time.Time `json:"opened_at"`
+	ClickedAt   *time.Time `json:"clicked_at"`
+}

@@ -163,6 +163,17 @@ func (r *Repository) CreateAppointment(ctx context.Context, accountID uuid.UUID,
 	return created, nil
 }
 
+// SetGoogleEvent records the Google Calendar event id created for an appointment.
+func (r *Repository) SetGoogleEvent(ctx context.Context, accountID, id uuid.UUID, eventID string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE appointments SET google_event_id = $3 WHERE account_id = $1 AND id = $2`,
+		accountID, id, eventID)
+	if err != nil {
+		return fmt.Errorf("appointments.SetGoogleEvent: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) UpdateStatus(ctx context.Context, accountID, id uuid.UUID, status string) (*models.Appointment, error) {
 	row := r.db.QueryRow(ctx,
 		`UPDATE appointments SET status = $3 WHERE account_id = $1 AND id = $2 RETURNING `+apptCols,

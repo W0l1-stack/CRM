@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Plus, Trash2, Send, Mail } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { Plus, Trash2, Send, Mail, BarChart3 } from 'lucide-react';
 import {
   useCampaigns,
   useCreateCampaign,
@@ -11,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { CardsSkeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
 
 const statusVariant = { sent: 'default', sending: 'secondary', draft: 'outline', scheduled: 'secondary' };
 
@@ -18,6 +21,15 @@ export default function Campaigns() {
   const { data: campaigns = [], isLoading } = useCampaigns();
   const deleteCampaign = useDeleteCampaign();
   const [showCreate, setShowCreate] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setShowCreate(true);
+      searchParams.delete('new');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   return (
     <div className="space-y-4">
@@ -32,14 +44,19 @@ export default function Campaigns() {
       {showCreate && <CreateCampaignForm onDone={() => setShowCreate(false)} />}
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <CardsSkeleton count={3} />
       ) : campaigns.length === 0 ? (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            No campaigns yet. Create one to email a filtered list of contacts (unsubscribe link is added
-            automatically).
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Mail}
+          title="Send your first campaign"
+          description="Email a smart list of contacts in one go. Track opens and clicks, and an unsubscribe link is added automatically."
+          action={
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" />
+              New campaign
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-3">
           {campaigns.map((c) => (
@@ -47,14 +64,23 @@ export default function Campaigns() {
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-base">{c.name}</CardTitle>
+                  <Link to={`/campaigns/${c.id}`} className="hover:underline">
+                    <CardTitle className="text-base">{c.name}</CardTitle>
+                  </Link>
                   <Badge variant={statusVariant[c.status] || 'outline'}>{c.status}</Badge>
                   {c.stats?.sent ? (
-                    <span className="text-xs text-muted-foreground">{c.stats.sent} sent</span>
+                    <span className="text-xs text-muted-foreground">
+                      {c.stats.sent} sent · {c.stats.opens || 0} opens · {c.stats.clicks || 0} clicks
+                    </span>
                   ) : null}
                 </div>
                 <div className="flex items-center gap-2">
                   <CampaignActions campaign={c} />
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={`/campaigns/${c.id}`}>
+                      <BarChart3 className="h-4 w-4" /> Report
+                    </Link>
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => deleteCampaign.mutate(c.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
