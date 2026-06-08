@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CardsSkeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/EmptyState';
+import { confirm } from '@/store/confirm.store';
 
 export default function Automations() {
   const navigate = useNavigate();
@@ -18,6 +19,18 @@ export default function Automations() {
   const updateAutomation = useUpdateAutomation();
   const deleteAutomation = useDeleteAutomation();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const remove = async (a) => {
+    if (
+      await confirm({
+        title: `Delete "${a.name}"?`,
+        description: 'This permanently deletes the automation. This cannot be undone.',
+        confirmLabel: 'Delete automation',
+      })
+    ) {
+      deleteAutomation.mutate(a.id);
+    }
+  };
 
   // Command palette / ⌘N deep-link opens the visual builder.
   useEffect(() => {
@@ -83,7 +96,7 @@ export default function Automations() {
                       <Pencil className="h-4 w-4" /> Edit
                     </Link>
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => deleteAutomation.mutate(a.id)}>
+                  <Button variant="ghost" size="icon" onClick={() => remove(a)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>

@@ -1,47 +1,48 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { Plus, Trash2, Send, Mail, BarChart3 } from 'lucide-react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Plus, Trash2, Send, Mail, BarChart3, Pencil } from 'lucide-react';
 import {
   useCampaigns,
-  useCreateCampaign,
   useSendCampaign,
   useScheduleCampaign,
   useDeleteCampaign,
 } from '@/hooks/useCampaigns';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CardsSkeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/EmptyState';
+import { confirm } from '@/store/confirm.store';
 
 const statusVariant = { sent: 'default', sending: 'secondary', draft: 'outline', scheduled: 'secondary' };
 
 export default function Campaigns() {
   const { data: campaigns = [], isLoading } = useCampaigns();
   const deleteCampaign = useDeleteCampaign();
-  const [showCreate, setShowCreate] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
 
-  useEffect(() => {
-    if (searchParams.get('new') === '1') {
-      setShowCreate(true);
-      searchParams.delete('new');
-      setSearchParams(searchParams, { replace: true });
+  const remove = async (c) => {
+    if (
+      await confirm({
+        title: `Delete "${c.name}"?`,
+        description: 'This permanently deletes the campaign and its report. This cannot be undone.',
+        confirmLabel: 'Delete campaign',
+      })
+    ) {
+      deleteCampaign.mutate(c.id);
     }
-  }, [searchParams, setSearchParams]);
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Email Campaigns</h1>
-        <Button onClick={() => setShowCreate((v) => !v)}>
-          <Plus className="h-4 w-4" />
-          New campaign
+        <Button asChild>
+          <Link to="/campaigns/new">
+            <Plus className="h-4 w-4" />
+            New campaign
+          </Link>
         </Button>
       </div>
-
-      {showCreate && <CreateCampaignForm onDone={() => setShowCreate(false)} />}
 
       {isLoading ? (
         <CardsSkeleton count={3} />
@@ -49,11 +50,13 @@ export default function Campaigns() {
         <EmptyState
           icon={Mail}
           title="Send your first campaign"
-          description="Email a smart list of contacts in one go. Track opens and clicks, and an unsubscribe link is added automatically."
+          description="Compose an email with drag-and-drop blocks, pick a smart-list audience, and track opens and clicks. An unsubscribe link is added automatically."
           action={
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="h-4 w-4" />
-              New campaign
+            <Button asChild>
+              <Link to="/campaigns/new">
+                <Plus className="h-4 w-4" />
+                New campaign
+              </Link>
             </Button>
           }
         />
@@ -76,12 +79,19 @@ export default function Campaigns() {
                 </div>
                 <div className="flex items-center gap-2">
                   <CampaignActions campaign={c} />
+                  {c.status === 'draft' && (
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={`/campaigns/${c.id}/edit`}>
+                        <Pencil className="h-4 w-4" /> Edit
+                      </Link>
+                    </Button>
+                  )}
                   <Button asChild variant="outline" size="sm">
                     <Link to={`/campaigns/${c.id}`}>
                       <BarChart3 className="h-4 w-4" /> Report
                     </Link>
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => deleteCampaign.mutate(c.id)}>
+                  <Button variant="ghost" size="icon" onClick={() => remove(c)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -105,8 +115,14 @@ function CampaignActions({ campaign }) {
   const locked = campaign.status === 'sending' || campaign.status === 'sent';
 
   if (locked) {
-    return <span className="text-xs text-muted-foreground capitalize">{campaign.status}</span>;
+    return <span className="text-xs capitalize text-muted-foreground">{campaign.status}</span>;
   }
+
+  const send = async () => {
+    if (await confirm({ title: `Send "${campaign.name}" now?`, description: 'Recipients will receive this email shortly.', confirmLabel: 'Send now', variant: 'default' })) {
+      sendCampaign.mutate(campaign.id);
+    }
+  };
 
   return (
     <div className="flex items-center gap-2">
@@ -124,64 +140,9 @@ function CampaignActions({ campaign }) {
       >
         Schedule
       </Button>
-      <Button
-        size="sm"
-        disabled={sendCampaign.isPending}
-        onClick={() => { if (window.confirm(`Send "${campaign.name}" now?`)) sendCampaign.mutate(campaign.id); }}
-      >
+      <Button size="sm" disabled={sendCampaign.isPending} onClick={send}>
         <Send className="h-4 w-4" /> Send
       </Button>
     </div>
-  );
-}
-
-function CreateCampaignForm({ onDone }) {
-  const createCampaign = useCreateCampaign();
-  const [form, setForm] = useState({ name: '', subject: '', body_html: '<p>Hi {{contact.name}},</p>\n<p></p>', tag: '' });
-
-  const submit = (e) => {
-    e.preventDefault();
-    createCampaign.mutate(
-      {
-        name: form.name,
-        subject: form.subject,
-        body_html: form.body_html,
-        recipient_filter: form.tag ? { tag: form.tag } : {},
-      },
-      { onSuccess: onDone }
-    );
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">New campaign</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form className="space-y-3" onSubmit={submit}>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Input placeholder="Campaign name *" required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-            <Input placeholder="Audience tag (blank = all)" value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} />
-          </div>
-          <Input placeholder="Subject *" required value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} />
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Body (HTML, supports {'{{contact.name}}'})</p>
-            <textarea
-              className="flex min-h-[160px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
-              value={form.body_html}
-              onChange={(e) => setForm((f) => ({ ...f, body_html: e.target.value }))}
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={createCampaign.isPending}>
-              {createCampaign.isPending ? 'Saving…' : 'Save draft'}
-            </Button>
-            <Button type="button" variant="ghost" onClick={onDone}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
   );
 }

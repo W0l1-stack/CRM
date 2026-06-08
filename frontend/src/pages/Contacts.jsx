@@ -216,7 +216,7 @@ export default function Contacts() {
           <Button variant="outline" size="sm" onClick={handleBulkTag} disabled={bulkTag.isPending}>
             <Tag className="h-4 w-4" /> Tag
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/campaigns?new=1')}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/campaigns/new')}>
             <Mail className="h-4 w-4" /> Email
           </Button>
           {canDelete && (

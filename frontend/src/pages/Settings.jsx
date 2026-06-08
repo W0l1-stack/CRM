@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { UserPlus, Trash2, Mail, MessageSquare, CalendarDays, CreditCard, CheckCircle2, ArrowRight } from 'lucide-react';
+import { UserPlus, Trash2, Mail, MessageSquare, CalendarDays, CreditCard, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import {
   useMe, useUpdateMe, useAccount, useUpdateAccount,
   useTeam, useInviteMember, useChangeRole, useRemoveMember,
 } from '@/hooks/useSettings';
+import { useIntegrationsStatus } from '@/hooks/useIntegrations';
 import { apiErrorMessage } from '@/hooks/useAuth';
+import { confirm } from '@/store/confirm.store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -198,7 +200,22 @@ function TeamCard() {
                   </select>
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="icon" onClick={() => removeMember.mutate(m.id)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          title: `Remove ${m.name}?`,
+                          description:
+                            'This permanently deletes the member. Deals, contacts and conversations assigned to them become unassigned. This cannot be undone.',
+                          confirmLabel: 'Delete member',
+                        })
+                      ) {
+                        removeMember.mutate(m.id);
+                      }
+                    }}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
@@ -213,38 +230,85 @@ function TeamCard() {
   );
 }
 
+function StatusBadge({ connected }) {
+  return connected ? (
+    <Badge variant="secondary" className="gap-1 border-green-200 bg-green-50 text-green-700">
+      <CheckCircle2 className="h-3 w-3" /> Connected
+    </Badge>
+  ) : (
+    <Badge variant="secondary" className="gap-1 border-amber-200 bg-amber-50 text-amber-700">
+      <AlertCircle className="h-3 w-3" /> Not connected
+    </Badge>
+  );
+}
+
 function IntegrationsCard() {
-  const integrations = [
-    { icon: Mail, name: 'Email (Resend)', desc: 'Outbound email and campaigns are delivered through Resend.', status: 'Managed' },
-    { icon: MessageSquare, name: 'SMS (Twilio)', desc: 'Two-way SMS is delivered through Twilio.', status: 'Managed' },
-    { icon: CalendarDays, name: 'Google Calendar', desc: 'Connect your calendar to sync availability and block booked slots.', status: 'Configure', to: '/calendar' },
+  const { data: status, isLoading } = useIntegrationsStatus();
+
+  const email = status?.email || {};
+  const sms = status?.sms || {};
+  const google = status?.google || {};
+
+  const rows = [
+    {
+      icon: Mail,
+      name: 'Email (Resend)',
+      connected: Boolean(email.configured),
+      desc: email.configured
+        ? 'Outbound email and campaigns are delivered through Resend.'
+        : 'Not configured. Set RESEND_API_KEY on the server to enable email.',
+    },
+    {
+      icon: MessageSquare,
+      name: 'SMS (Twilio)',
+      connected: Boolean(sms.configured),
+      desc: sms.configured
+        ? `Two-way SMS is delivered through Twilio${sms.from_number ? ` from ${sms.from_number}` : ''}.`
+        : 'Not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER to enable SMS.',
+    },
+    {
+      icon: CalendarDays,
+      name: 'Google Calendar',
+      connected: Boolean(google.connected),
+      configurable: true,
+      desc: google.connected
+        ? `Connected${google.email ? ` as ${google.email}` : ''}. Availability syncs and booked slots are blocked.`
+        : google.configured
+          ? 'Connect your calendar to sync availability and block booked slots.'
+          : 'Google OAuth is not configured on this server.',
+      to: '/calendar',
+    },
   ];
+
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">Integrations</CardTitle></CardHeader>
       <CardContent className="space-y-3">
-        {integrations.map((it) => (
-          <div key={it.name} className="flex items-center justify-between rounded-md border p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary">
-                <it.icon className="h-4 w-4" />
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Checking connections…</p>
+        ) : (
+          rows.map((it) => (
+            <div key={it.name} className="flex items-center justify-between gap-3 rounded-md border p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary">
+                  <it.icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{it.name}</p>
+                  <p className="text-sm text-muted-foreground">{it.desc}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium">{it.name}</p>
-                <p className="text-sm text-muted-foreground">{it.desc}</p>
+              <div className="flex shrink-0 items-center gap-2">
+                <StatusBadge connected={it.connected} />
+                {it.configurable && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={it.to}>{it.connected ? 'Manage' : 'Connect'} <ArrowRight className="h-3 w-3" /></Link>
+                  </Button>
+                )}
               </div>
             </div>
-            {it.status === 'Managed' ? (
-              <Badge variant="secondary" className="gap-1">
-                <CheckCircle2 className="h-3 w-3" /> Active
-              </Badge>
-            ) : (
-              <Button asChild variant="outline" size="sm">
-                <Link to={it.to}>Configure <ArrowRight className="h-3 w-3" /></Link>
-              </Button>
-            )}
-          </div>
-        ))}
+          ))
+        )}
       </CardContent>
     </Card>
   );

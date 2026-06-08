@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { ArrowLeft, Mail, MailOpen, MousePointerClick, UserMinus, Send } from 'lucide-react';
+import { ArrowLeft, Mail, MailOpen, MousePointerClick, UserMinus, Send, Pencil } from 'lucide-react';
 import { useCampaign, useCampaignRecipients } from '@/hooks/useCampaigns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,21 @@ const statusVariant = { clicked: 'default', opened: 'secondary', sent: 'outline'
 function pct(part, whole) {
   if (!whole) return '0%';
   return `${Math.round((part / whole) * 100)}%`;
+}
+
+function RateBar({ label, value, total, color }) {
+  const ratio = total ? Math.min(100, Math.round((value / total) * 100)) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium">{ratio}% <span className="text-muted-foreground">({value}/{total})</span></span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${ratio}%` }} />
+      </div>
+    </div>
+  );
 }
 
 export default function CampaignDetail() {
@@ -51,6 +66,13 @@ export default function CampaignDetail() {
         <Mail className="h-5 w-5 text-primary" />
         <h1 className="text-2xl font-semibold">{campaign.name}</h1>
         <Badge variant="secondary" className="capitalize">{campaign.status}</Badge>
+        {campaign.status === 'draft' && (
+          <Button asChild variant="outline" size="sm" className="ml-auto">
+            <Link to={`/campaigns/${campaign.id}/edit`}>
+              <Pencil className="h-4 w-4" /> Edit campaign
+            </Link>
+          </Button>
+        )}
       </div>
       <p className="text-sm text-muted-foreground">
         Subject: <span className="text-foreground">{campaign.subject}</span>
@@ -71,6 +93,20 @@ export default function CampaignDetail() {
           </Card>
         ))}
       </div>
+
+      {sent > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Performance</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <RateBar label="Open rate" value={opens} total={sent} color="bg-blue-500" />
+            <RateBar label="Click rate" value={clicks} total={sent} color="bg-emerald-500" />
+            <RateBar label="Click-to-open" value={clicks} total={opens} color="bg-violet-500" />
+            <RateBar label="Unsubscribe rate" value={unsubs} total={sent} color="bg-amber-500" />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

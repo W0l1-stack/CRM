@@ -70,3 +70,15 @@ export function useUpdateConversationStatus() {
     onError: (e) => toast.error(apiErrorMessage(e, 'Could not update conversation')),
   });
 }
+
+export function useDeleteConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.delete(`/conversations/${id}`).then(unwrap),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      toast.success('Conversation deleted');
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Could not delete conversation')),
+  });
+}

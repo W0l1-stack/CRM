@@ -24,7 +24,8 @@ const PAGES = [
 
 const ACTIONS = [
   { label: 'New contact', to: '/contacts?new=1', icon: Plus, keywords: 'add create person' },
-  { label: 'New campaign', to: '/campaigns?new=1', icon: Plus, keywords: 'add create email' },
+  { label: 'New campaign', to: '/campaigns/new', icon: Plus, keywords: 'add create email' },
+  { label: 'New form', to: '/forms/new', icon: Plus, keywords: 'add create lead capture' },
   { label: 'New automation', to: '/automations?new=1', icon: Plus, keywords: 'add create workflow' },
 ];
 

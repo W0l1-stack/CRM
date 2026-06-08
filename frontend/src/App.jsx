@@ -13,8 +13,10 @@ import AutomationBuilder from '@/pages/AutomationBuilder';
 import Calendar from '@/pages/Calendar';
 import Booking from '@/pages/Booking';
 import Forms from '@/pages/Forms';
+import FormBuilder from '@/pages/FormBuilder';
 import PublicForm from '@/pages/PublicForm';
 import Campaigns from '@/pages/Campaigns';
+import CampaignBuilder from '@/pages/CampaignBuilder';
 import CampaignDetail from '@/pages/CampaignDetail';
 import Billing from '@/pages/Billing';
 import Settings from '@/pages/Settings';
@@ -40,7 +42,11 @@ export default function App() {
           <Route path="/automations/:id" element={<AutomationBuilder />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/forms" element={<Forms />} />
+          <Route path="/forms/new" element={<FormBuilder />} />
+          <Route path="/forms/:id" element={<FormBuilder />} />
           <Route path="/campaigns" element={<Campaigns />} />
+          <Route path="/campaigns/new" element={<CampaignBuilder />} />
+          <Route path="/campaigns/:id/edit" element={<CampaignBuilder />} />
           <Route path="/campaigns/:id" element={<CampaignDetail />} />
           <Route path="/billing" element={<Billing />} />
           <Route path="/settings" element={<Settings />} />

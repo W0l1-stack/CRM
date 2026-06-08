@@ -122,6 +122,27 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, c, nil)
 }
 
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	accountID, ok := middleware.AccountID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", "no tenant context")
+		return
+	}
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "invalid conversation id")
+		return
+	}
+	if err := h.svc.DeleteConversation(r.Context(), accountID, id); errors.Is(err, ErrNotFound) {
+		response.Error(w, http.StatusNotFound, "not_found", "conversation not found")
+		return
+	} else if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal_error", "could not delete conversation")
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "deleted"}, nil)
+}
+
 func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	accountID, ok := middleware.AccountID(r.Context())
 	if !ok {

@@ -109,6 +109,20 @@ func (r *Repository) SetActive(ctx context.Context, accountID, userID uuid.UUID,
 	return nil
 }
 
+// Delete permanently removes a member. Their refresh tokens cascade; deals,
+// contacts, conversations and messages they were assigned to are reassigned to
+// NULL by the ON DELETE SET NULL constraints (migration 006).
+func (r *Repository) Delete(ctx context.Context, accountID, userID uuid.UUID) error {
+	tag, err := r.db.Exec(ctx, `DELETE FROM users WHERE account_id = $1 AND id = $2`, accountID, userID)
+	if err != nil {
+		return fmt.Errorf("team.Delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *Repository) UpdateProfile(ctx context.Context, accountID, userID uuid.UUID, name, timezone string, avatarURL *string) (*models.User, error) {
 	row := r.db.QueryRow(ctx,
 		`UPDATE users SET name = $3, timezone = $4, avatar_url = $5, updated_at = NOW()

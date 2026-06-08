@@ -130,7 +130,7 @@ export default function OnboardingWizard() {
         </p>
       ),
       cta: 'Go to campaigns',
-      onNext: () => navigate('/campaigns?new=1'),
+      onNext: () => navigate('/campaigns/new'),
     },
   ];
 

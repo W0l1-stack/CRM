@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/store/toast.store';
+import { confirm } from '@/store/confirm.store';
 
 const selectClass = 'flex h-9 rounded-md border border-input bg-background px-2 text-sm';
 
@@ -101,7 +102,21 @@ export default function Calendar() {
                       <Copy className="h-4 w-4" />
                       Copy booking link
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => deleteType.mutate(t.id)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={async () => {
+                        if (
+                          await confirm({
+                            title: `Delete "${t.name}"?`,
+                            description: 'This permanently deletes the appointment type and its booking link. Existing booked appointments are kept. This cannot be undone.',
+                            confirmLabel: 'Delete',
+                          })
+                        ) {
+                          deleteType.mutate(t.id);
+                        }
+                      }}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

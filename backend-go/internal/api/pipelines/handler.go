@@ -85,3 +85,56 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusCreated, created, nil)
 }
+
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	accountID, ok := middleware.AccountID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", "no tenant context")
+		return
+	}
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "invalid pipeline id")
+		return
+	}
+	var p models.Pipeline
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+	updated, err := h.svc.Update(r.Context(), accountID, id, &p)
+	if errors.Is(err, ErrValidation) {
+		response.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	if errors.Is(err, ErrNotFound) {
+		response.Error(w, http.StatusNotFound, "not_found", "pipeline not found")
+		return
+	}
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal_error", "could not update pipeline")
+		return
+	}
+	response.JSON(w, http.StatusOK, updated, nil)
+}
+
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	accountID, ok := middleware.AccountID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", "no tenant context")
+		return
+	}
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "bad_request", "invalid pipeline id")
+		return
+	}
+	if err := h.svc.Delete(r.Context(), accountID, id); errors.Is(err, ErrNotFound) {
+		response.Error(w, http.StatusNotFound, "not_found", "pipeline not found")
+		return
+	} else if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal_error", "could not delete pipeline")
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "deleted"}, nil)
+}

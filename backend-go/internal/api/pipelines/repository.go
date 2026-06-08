@@ -94,3 +94,36 @@ func (r *Repository) Create(ctx context.Context, accountID uuid.UUID, p *models.
 	}
 	return created, nil
 }
+
+func (r *Repository) Update(ctx context.Context, accountID, id uuid.UUID, p *models.Pipeline) (*models.Pipeline, error) {
+	stagesJSON, err := json.Marshal(p.Stages)
+	if err != nil {
+		return nil, fmt.Errorf("pipelines.Update: encode stages: %w", err)
+	}
+	row := r.db.QueryRow(ctx,
+		`UPDATE pipelines SET name = $3, stages = $4::jsonb WHERE account_id = $1 AND id = $2
+		 RETURNING id, account_id, name, stages, created_at`,
+		accountID, id, p.Name, string(stagesJSON),
+	)
+	updated, err := scanPipeline(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("pipelines.Update: %w", err)
+	}
+	return updated, nil
+}
+
+// Delete removes a pipeline. Its deals are removed by the ON DELETE CASCADE
+// constraint on deals.pipeline_id (migration 006).
+func (r *Repository) Delete(ctx context.Context, accountID, id uuid.UUID) error {
+	tag, err := r.db.Exec(ctx, `DELETE FROM pipelines WHERE account_id = $1 AND id = $2`, accountID, id)
+	if err != nil {
+		return fmt.Errorf("pipelines.Delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

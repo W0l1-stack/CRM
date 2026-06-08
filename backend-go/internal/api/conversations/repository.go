@@ -110,6 +110,19 @@ func (r *Repository) UpdateStatus(ctx context.Context, accountID, id uuid.UUID, 
 	return c, nil
 }
 
+// DeleteConversation permanently removes a conversation. Its messages are
+// removed by the ON DELETE CASCADE on messages.conversation_id.
+func (r *Repository) DeleteConversation(ctx context.Context, accountID, id uuid.UUID) error {
+	tag, err := r.db.Exec(ctx, `DELETE FROM conversations WHERE account_id = $1 AND id = $2`, accountID, id)
+	if err != nil {
+		return fmt.Errorf("conversations.DeleteConversation: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 const msgColumns = `id, account_id, conversation_id, sent_by, direction, channel, content, status, external_id, created_at`
 
 func scanMessage(row pgx.Row) (*models.Message, error) {

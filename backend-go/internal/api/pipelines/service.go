@@ -37,20 +37,47 @@ func (s *Service) Get(ctx context.Context, accountID, id uuid.UUID) (*models.Pip
 }
 
 func (s *Service) Create(ctx context.Context, accountID uuid.UUID, p *models.Pipeline) (*models.Pipeline, error) {
-	p.Name = strings.TrimSpace(p.Name)
-	if p.Name == "" {
-		return nil, fmt.Errorf("pipelines.Create: %w: name is required", ErrValidation)
-	}
-	if len(p.Stages) == 0 {
-		return nil, fmt.Errorf("pipelines.Create: %w: at least one stage is required", ErrValidation)
-	}
-	for i, st := range p.Stages {
-		if strings.TrimSpace(st.ID) == "" || strings.TrimSpace(st.Name) == "" {
-			return nil, fmt.Errorf("pipelines.Create: %w: stage %d needs an id and name", ErrValidation, i)
-		}
+	if err := validate(p); err != nil {
+		return nil, err
 	}
 	if err := s.enforcer.Check(ctx, accountID, "pipelines"); err != nil {
 		return nil, err
 	}
 	return s.repo.Create(ctx, accountID, p)
+}
+
+func (s *Service) Update(ctx context.Context, accountID, id uuid.UUID, p *models.Pipeline) (*models.Pipeline, error) {
+	if err := validate(p); err != nil {
+		return nil, err
+	}
+	return s.repo.Update(ctx, accountID, id, p)
+}
+
+func (s *Service) Delete(ctx context.Context, accountID, id uuid.UUID) error {
+	return s.repo.Delete(ctx, accountID, id)
+}
+
+// validate checks a pipeline's name and stages. Stage ids must be unique so
+// deals (which reference stage_id) map unambiguously to a column.
+func validate(p *models.Pipeline) error {
+	p.Name = strings.TrimSpace(p.Name)
+	if p.Name == "" {
+		return fmt.Errorf("pipelines.validate: %w: name is required", ErrValidation)
+	}
+	if len(p.Stages) == 0 {
+		return fmt.Errorf("pipelines.validate: %w: at least one stage is required", ErrValidation)
+	}
+	seen := make(map[string]bool, len(p.Stages))
+	for i := range p.Stages {
+		p.Stages[i].ID = strings.TrimSpace(p.Stages[i].ID)
+		p.Stages[i].Name = strings.TrimSpace(p.Stages[i].Name)
+		if p.Stages[i].ID == "" || p.Stages[i].Name == "" {
+			return fmt.Errorf("pipelines.validate: %w: stage %d needs an id and name", ErrValidation, i)
+		}
+		if seen[p.Stages[i].ID] {
+			return fmt.Errorf("pipelines.validate: %w: duplicate stage id %q", ErrValidation, p.Stages[i].ID)
+		}
+		seen[p.Stages[i].ID] = true
+	}
+	return nil
 }

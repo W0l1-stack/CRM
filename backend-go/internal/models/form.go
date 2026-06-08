@@ -8,10 +8,12 @@ import (
 
 // FormField defines one input on a lead-capture form.
 type FormField struct {
-	Name     string `json:"name"`     // maps to a contact field or custom field
-	Label    string `json:"label"`
-	Type     string `json:"type"`     // text, email, tel, textarea
-	Required bool   `json:"required"`
+	Name        string   `json:"name"`  // maps to a contact field or custom field
+	Label       string   `json:"label"`
+	Type        string   `json:"type"`  // text, email, tel, number, textarea, select, checkbox
+	Placeholder string   `json:"placeholder,omitempty"`
+	Required    bool     `json:"required"`
+	Options     []string `json:"options,omitempty"` // choices for select fields
 }
 
 // Form is an embeddable lead-capture form.

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { Send, Circle, MessageSquare } from 'lucide-react';
-import { useConversations, useMessages, useSendMessage } from '@/hooks/useConversations';
+import { Send, Circle, MessageSquare, Trash2 } from 'lucide-react';
+import { useConversations, useMessages, useSendMessage, useDeleteConversation } from '@/hooks/useConversations';
 import { useContacts } from '@/hooks/useContacts';
 import { getSocket } from '@/lib/socket';
 import { Card } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/EmptyState';
 import { toast } from '@/store/toast.store';
+import { confirm } from '@/store/confirm.store';
 import { cn } from '@/lib/utils';
 
 export default function Conversations() {
@@ -106,7 +107,11 @@ export default function Conversations() {
 
       <Card className="flex flex-1 flex-col overflow-hidden">
         {selected ? (
-          <Thread conversation={selected} title={contactName[selected.contact_id] || 'Conversation'} />
+          <Thread
+            conversation={selected}
+            title={contactName[selected.contact_id] || 'Conversation'}
+            onDeleted={() => setSelectedId(null)}
+          />
         ) : conversations.length === 0 ? (
           <EmptyState
             className="m-auto border-0 bg-transparent"
@@ -124,9 +129,10 @@ export default function Conversations() {
   );
 }
 
-function Thread({ conversation, title }) {
+function Thread({ conversation, title, onDeleted }) {
   const { data: messages = [] } = useMessages(conversation.id);
   const sendMessage = useSendMessage();
+  const deleteConversation = useDeleteConversation();
   const [text, setText] = useState('');
 
   const submit = (e) => {
@@ -138,6 +144,18 @@ function Thread({ conversation, title }) {
     );
   };
 
+  const remove = async () => {
+    if (
+      await confirm({
+        title: 'Delete conversation?',
+        description: `This permanently deletes the thread with ${title} and all its messages. This cannot be undone.`,
+        confirmLabel: 'Delete conversation',
+      })
+    ) {
+      deleteConversation.mutate(conversation.id, { onSuccess: onDeleted });
+    }
+  };
+
   return (
     <>
       <div className="flex items-center gap-2 border-b p-4">
@@ -146,6 +164,9 @@ function Thread({ conversation, title }) {
         <Badge variant="outline" className="ml-auto">
           {conversation.status}
         </Badge>
+        <Button variant="ghost" size="icon" onClick={remove} title="Delete conversation">
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="flex-1 space-y-3 overflow-auto p-4">

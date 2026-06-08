@@ -38,6 +38,19 @@ export function useCreateCampaign() {
   });
 }
 
+export function useUpdateCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) => api.put(`/campaigns/${id}`, body).then(unwrap),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      if (vars?.id) qc.invalidateQueries({ queryKey: ['campaign', vars.id] });
+      toast.success('Campaign saved');
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Could not save campaign')),
+  });
+}
+
 export function useSendCampaign() {
   const qc = useQueryClient();
   return useMutation({

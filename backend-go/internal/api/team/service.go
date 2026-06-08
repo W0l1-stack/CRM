@@ -121,7 +121,7 @@ func (s *Service) Remove(ctx context.Context, accountID, actingUserID, targetUse
 			return ErrLastOwner
 		}
 	}
-	return s.repo.SetActive(ctx, accountID, targetUserID, false)
+	return s.repo.Delete(ctx, accountID, targetUserID)
 }
 
 func (s *Service) Me(ctx context.Context, accountID, userID uuid.UUID) (*models.User, error) {

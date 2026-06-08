@@ -21,6 +21,7 @@ import (
 	"crm-go-api/internal/api/deals"
 	"crm-go-api/internal/api/forms"
 	"crm-go-api/internal/api/googlecal"
+	"crm-go-api/internal/api/integrations"
 	"crm-go-api/internal/api/pipelines"
 	"crm-go-api/internal/api/subaccounts"
 	"crm-go-api/internal/api/team"
@@ -141,6 +142,8 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/pipelines", pipelineHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/pipelines", pipelineHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/pipelines/{id}", pipelineHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/pipelines/{id}", pipelineHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/pipelines/{id}", middleware.RequireManager(pipelineHandler.Delete)).Methods(http.MethodDelete)
 
 	dealHandler := deals.NewHandler(deals.NewService(deals.NewRepository(pool), publisher))
 	protected.HandleFunc("/deals", dealHandler.List).Methods(http.MethodGet)
@@ -156,6 +159,8 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/automations/{id}", automationHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/automations/{id}", middleware.RequireManager(automationHandler.Delete)).Methods(http.MethodDelete)
 
+	integrationsHandler := integrations.NewHandler(cfg, googleSvc)
+	protected.HandleFunc("/integrations/status", integrationsHandler.Status).Methods(http.MethodGet)
 	protected.HandleFunc("/integrations/google/auth-url", googleHandler.AuthURL).Methods(http.MethodGet)
 	protected.HandleFunc("/integrations/google/status", googleHandler.Status).Methods(http.MethodGet)
 	protected.HandleFunc("/integrations/google", googleHandler.Disconnect).Methods(http.MethodDelete)
@@ -206,6 +211,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/conversations", convHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/conversations", convHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/conversations/{id}", convHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/conversations/{id}", middleware.RequireManager(convHandler.Delete)).Methods(http.MethodDelete)
 	protected.HandleFunc("/conversations/{id}/status", convHandler.UpdateStatus).Methods(http.MethodPut)
 	protected.HandleFunc("/conversations/{id}/messages", convHandler.ListMessages).Methods(http.MethodGet)
 	protected.HandleFunc("/conversations/{id}/messages", convHandler.CreateMessage).Methods(http.MethodPost)

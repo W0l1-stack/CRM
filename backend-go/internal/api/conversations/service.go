@@ -60,6 +60,10 @@ func (s *Service) UpdateStatus(ctx context.Context, accountID, id uuid.UUID, sta
 	return s.repo.UpdateStatus(ctx, accountID, id, status)
 }
 
+func (s *Service) DeleteConversation(ctx context.Context, accountID, id uuid.UUID) error {
+	return s.repo.DeleteConversation(ctx, accountID, id)
+}
+
 func (s *Service) ListMessages(ctx context.Context, accountID, conversationID uuid.UUID) ([]models.Message, error) {
 	return s.repo.ListMessages(ctx, accountID, conversationID)
 }
