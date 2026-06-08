@@ -101,7 +101,7 @@ async function resume(runId, seq, timeout) {
   if (Number(run.wait_seq) !== Number(seq)) return; // stale
 
   if (run.status === 'waiting_event' && timeout) {
-    const onTimeout = (run.wait_action && run.wait_action.on_timeout) || [];
+    const onTimeout = (run.wait_action && run.wait_action.config && run.wait_action.config.on_timeout) || [];
     const pending = [...onTimeout, ...(run.pending || [])];
     await pool.query(
       `UPDATE journey_runs SET status = 'active', pending = $2::jsonb, wait_event = NULL, wait_action = NULL, expires_at = NULL, updated_at = NOW() WHERE id = $1`,
@@ -125,7 +125,7 @@ async function handleContactEvent(accountID, contactId, event) {
     [accountID, contactId, event]
   );
   for (const run of rows) {
-    const onEvent = (run.wait_action && run.wait_action.on_event) || [];
+    const onEvent = (run.wait_action && run.wait_action.config && run.wait_action.config.on_event) || [];
     const pending = [...onEvent, ...(run.pending || [])];
     const seq = Number(run.wait_seq) + 1; // bump so the pending timeout job becomes stale
     await pool.query(

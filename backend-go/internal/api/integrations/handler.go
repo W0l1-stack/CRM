@@ -56,10 +56,16 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		google = map[string]interface{}{"connected": false, "configured": false}
 	}
 
+	ai := byKind["ai"]
+	if ai == nil {
+		ai = map[string]interface{}{"connected": false, "provider": "anthropic", "source": "account"}
+	}
+
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"email":  email,
 		"sms":    sms,
 		"google": google,
+		"ai":     ai,
 	}, nil)
 }
 

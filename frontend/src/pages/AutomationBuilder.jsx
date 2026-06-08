@@ -53,7 +53,7 @@ const noValueOp = (op) => op === 'not_empty' || op === 'empty';
 const newCase = () => ({ label: '', field: 'tags', op: 'has_tag', value: '', actions: [] });
 const newAction = (type) => {
   if (type === 'branch') return { type, config: { cases: [newCase()], default: [] } };
-  if (type === 'wait_event') return { type, config: { event: 'replied', timeout_days: 2 }, on_event: [], on_timeout: [] };
+  if (type === 'wait_event') return { type, config: { event: 'replied', timeout_days: 2, on_event: [], on_timeout: [] } };
   return { type, config: {} };
 };
 const isSpecial = (type) => type === 'branch' || type === 'wait_event';
@@ -378,8 +378,8 @@ function BranchCard({ action, dragging, over, onChange, onRemove }) {
 // (email), then run the matching path — or the timeout path if they don't.
 function WaitEventCard({ action, dragging, over, onChange, onRemove }) {
   const cfg = action.config || {};
-  const onEvent = Array.isArray(action.on_event) ? action.on_event : [];
-  const onTimeout = Array.isArray(action.on_timeout) ? action.on_timeout : [];
+  const onEvent = Array.isArray(cfg.on_event) ? cfg.on_event : [];
+  const onTimeout = Array.isArray(cfg.on_timeout) ? cfg.on_timeout : [];
   const setConfig = (patch) => onChange({ ...action, config: { ...cfg, ...patch } });
 
   return (
@@ -413,13 +413,13 @@ function WaitEventCard({ action, dragging, over, onChange, onRemove }) {
         <div className="rounded-lg border bg-muted/30 p-3">
           <span className="mb-2 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">If they respond</span>
           <div className="border-l-2 border-emerald-200 pl-3">
-            <NestedActions actions={onEvent} onChange={(a) => onChange({ ...action, on_event: a })} />
+            <NestedActions actions={onEvent} onChange={(a) => setConfig({ on_event: a })} />
           </div>
         </div>
         <div className="rounded-lg border bg-muted/30 p-3">
           <span className="mb-2 inline-block rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">If no response (timeout)</span>
           <div className="border-l-2 border-border pl-3">
-            <NestedActions actions={onTimeout} onChange={(a) => onChange({ ...action, on_timeout: a })} />
+            <NestedActions actions={onTimeout} onChange={(a) => setConfig({ on_timeout: a })} />
           </div>
         </div>
       </div>

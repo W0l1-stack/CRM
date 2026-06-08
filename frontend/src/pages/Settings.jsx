@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { UserPlus, Trash2, Mail, MessageSquare, CalendarDays, CreditCard, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { UserPlus, Trash2, Mail, MessageSquare, CalendarDays, CreditCard, CheckCircle2, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
 import {
   useMe, useUpdateMe, useAccount, useUpdateAccount,
   useTeam, useInviteMember, useChangeRole, useRemoveMember,
@@ -283,6 +283,7 @@ function IntegrationsCard() {
   const email = status?.email || {};
   const sms = status?.sms || {};
   const google = status?.google || {};
+  const ai = status?.ai || {};
 
   const doDisconnect = async (kind) => {
     if (await confirm({ title: `Disconnect ${kind}?`, description: 'Sending falls back to the server default (if configured).', confirmLabel: 'Disconnect' })) {
@@ -300,6 +301,25 @@ function IntegrationsCard() {
           <>
             <ChannelRow icon={Mail} title="Email" kind="email" state={email} onConnect={() => setConnecting('email')} onDisconnect={() => doDisconnect('email')} />
             <ChannelRow icon={MessageSquare} title="SMS" kind="sms" state={sms} onConnect={() => setConnecting('sms')} onDisconnect={() => doDisconnect('sms')} />
+
+            <div className="flex items-center justify-between gap-3 rounded-md border p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary"><Sparkles className="h-4 w-4" /></div>
+                <div>
+                  <p className="text-sm font-medium">AI Assistant (Anthropic)</p>
+                  <p className="text-sm text-muted-foreground">
+                    {ai.connected
+                      ? 'Connected. Your Claude key powers the in-app assistant.'
+                      : 'Connect your Anthropic API key to enable the assistant that builds automations, campaigns and forms.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <StatusBadge connected={Boolean(ai.connected)} />
+                <Button variant="outline" size="sm" onClick={() => setConnecting('ai')}>{ai.connected ? 'Change' : 'Connect'}</Button>
+                {ai.connected && <Button variant="ghost" size="sm" className="text-destructive" onClick={() => doDisconnect('ai')}>Disconnect</Button>}
+              </div>
+            </div>
 
             <div className="flex items-center justify-between gap-3 rounded-md border p-4">
               <div className="flex items-start gap-3">
@@ -349,7 +369,7 @@ function ConnectDialog({ kind, providers, onClose, onConnect, pending }) {
   };
 
   return (
-    <Dialog open onClose={onClose} title={`Connect ${kind === 'sms' ? 'SMS' : 'email'} provider`} description="Your credentials are encrypted and used only for your account.">
+    <Dialog open onClose={onClose} title={`Connect ${kind === 'sms' ? 'SMS' : kind === 'ai' ? 'AI' : 'email'} provider`} description="Your credentials are encrypted and used only for your account.">
       <form className="space-y-3" onSubmit={submit}>
         <div className="space-y-1">
           <Label>Provider</Label>

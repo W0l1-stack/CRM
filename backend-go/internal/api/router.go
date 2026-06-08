@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"crm-go-api/internal/api/ai"
 	"crm-go-api/internal/api/appointments"
 	"crm-go-api/internal/api/auth"
 	"crm-go-api/internal/api/automations"
@@ -92,12 +93,14 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	booking.HandleFunc("/{id}/slots", apptHandler.PublicSlots).Methods(http.MethodGet)
 	booking.HandleFunc("/{id}/book", apptHandler.PublicBook).Methods(http.MethodPost)
 
-	formHandler := forms.NewHandler(forms.NewService(forms.NewRepository(pool), publisher))
+	formSvc := forms.NewService(forms.NewRepository(pool), publisher)
+	formHandler := forms.NewHandler(formSvc)
 	publicForms := router.PathPrefix("/api/v1/public/forms").Subrouter()
 	publicForms.HandleFunc("/{id}", formHandler.PublicGet).Methods(http.MethodGet)
 	publicForms.HandleFunc("/{id}/submit", formHandler.PublicSubmit).Methods(http.MethodPost)
 
-	campaignHandler := campaigns.NewHandler(campaigns.NewService(campaigns.NewRepository(pool), publisher))
+	campaignSvc := campaigns.NewService(campaigns.NewRepository(pool), publisher)
+	campaignHandler := campaigns.NewHandler(campaignSvc)
 	router.HandleFunc("/api/v1/public/unsubscribe", campaignHandler.Unsubscribe).Methods(http.MethodGet)
 
 	// Google OAuth callback is public (browser redirect from Google; the signed
@@ -152,15 +155,21 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/deals/{id}", dealHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/deals/{id}", middleware.RequireManager(dealHandler.Delete)).Methods(http.MethodDelete)
 
-	automationHandler := automations.NewHandler(automations.NewService(automations.NewRepository(pool), enforcer))
+	automationSvc := automations.NewService(automations.NewRepository(pool), enforcer)
+	automationHandler := automations.NewHandler(automationSvc)
 	protected.HandleFunc("/automations", automationHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/automations", automationHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/automations/{id}", automationHandler.Get).Methods(http.MethodGet)
 	protected.HandleFunc("/automations/{id}", automationHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/automations/{id}", middleware.RequireManager(automationHandler.Delete)).Methods(http.MethodDelete)
 
-	integrationsHandler := integrations.NewHandler(cfg, googleSvc, integrations.NewService(integrations.NewRepository(pool, cfg.JWTSecret)))
+	intgRepo := integrations.NewRepository(pool, cfg.JWTSecret)
+	integrationsHandler := integrations.NewHandler(cfg, googleSvc, integrations.NewService(intgRepo))
 	protected.HandleFunc("/integrations/status", integrationsHandler.Status).Methods(http.MethodGet)
+
+	// AI assistant (uses the account's own Anthropic key from integrations).
+	aiHandler := ai.NewHandler(ai.NewService(intgRepo, automationSvc, campaignSvc, formSvc, pool))
+	protected.HandleFunc("/ai/assist", aiHandler.Assist).Methods(http.MethodPost)
 	protected.HandleFunc("/integrations/catalog", integrationsHandler.Catalog).Methods(http.MethodGet)
 	protected.HandleFunc("/integrations/connections", integrationsHandler.Connections).Methods(http.MethodGet)
 	// Connecting/disconnecting a provider is an owner/admin action.

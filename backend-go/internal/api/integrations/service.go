@@ -31,6 +31,7 @@ var CATALOG = []ProviderSpec{
 	{Provider: "resend", Label: "Resend", Kind: "email", Fields: []string{"api_key"}, FromHint: "From email"},
 	{Provider: "sendgrid", Label: "SendGrid", Kind: "email", Fields: []string{"api_key"}, FromHint: "From email"},
 	{Provider: "mailgun", Label: "Mailgun", Kind: "email", Fields: []string{"api_key", "domain"}, FromHint: "From email"},
+	{Provider: "anthropic", Label: "Anthropic (Claude)", Kind: "ai", Fields: []string{"api_key"}, FromHint: "Model (optional, e.g. claude-sonnet-4-6)"},
 }
 
 func specFor(provider string) *ProviderSpec {
@@ -65,7 +66,8 @@ func (s *Service) Connect(ctx context.Context, accountID uuid.UUID, kind, provid
 	if spec.Kind != kind {
 		return fmt.Errorf("integrations.Connect: %w: provider %q is not a %s provider", ErrValidation, provider, kind)
 	}
-	if strings.TrimSpace(from) == "" {
+	// A "from" (number/email) is required for sms/email; AI providers don't need one.
+	if kind != "ai" && strings.TrimSpace(from) == "" {
 		return fmt.Errorf("integrations.Connect: %w: a from value is required", ErrValidation)
 	}
 	clean := map[string]string{}
@@ -80,7 +82,7 @@ func (s *Service) Connect(ctx context.Context, accountID uuid.UUID, kind, provid
 }
 
 func (s *Service) Disconnect(ctx context.Context, accountID uuid.UUID, kind string) error {
-	if kind != "sms" && kind != "email" {
+	if kind != "sms" && kind != "email" && kind != "ai" {
 		return fmt.Errorf("integrations.Disconnect: %w: invalid kind", ErrValidation)
 	}
 	return s.repo.Delete(ctx, accountID, kind)

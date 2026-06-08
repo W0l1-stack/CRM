@@ -4,6 +4,7 @@ import Topbar from './Topbar';
 import CommandPalette from '@/components/CommandPalette';
 import ShortcutsHelp from '@/components/ShortcutsHelp';
 import OnboardingWizard from '@/components/OnboardingWizard';
+import Assistant from '@/components/Assistant';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 /** App shell for authenticated pages: sidebar + topbar + routed content. */
@@ -21,6 +22,7 @@ export default function PageWrapper() {
       <CommandPalette />
       <ShortcutsHelp />
       <OnboardingWizard />
+      <Assistant />
     </div>
   );
 }
