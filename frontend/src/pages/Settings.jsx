@@ -5,9 +5,12 @@ import {
   useMe, useUpdateMe, useAccount, useUpdateAccount,
   useTeam, useInviteMember, useChangeRole, useRemoveMember,
 } from '@/hooks/useSettings';
-import { useIntegrationsStatus } from '@/hooks/useIntegrations';
+import {
+  useIntegrationsStatus, useIntegrationCatalog, useConnectIntegration, useDisconnectIntegration,
+} from '@/hooks/useIntegrations';
 import { apiErrorMessage } from '@/hooks/useAuth';
 import { confirm } from '@/store/confirm.store';
+import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -242,43 +245,50 @@ function StatusBadge({ connected }) {
   );
 }
 
+function ChannelRow({ icon: Icon, title, kind, state, onConnect, onDisconnect }) {
+  const connected = Boolean(state.connected);
+  const account = state.source === 'account';
+  const desc = !connected
+    ? `Not connected. Connect your own ${kind === 'sms' ? 'SMS' : 'email'} provider to start sending.`
+    : account
+      ? `Sending via your ${state.provider}${state.from ? ` from ${state.from}` : ''}.`
+      : `Using the built-in ${state.provider} (server default). Connect your own provider to use your account.`;
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary"><Icon className="h-4 w-4" /></div>
+        <div>
+          <p className="text-sm font-medium">{title}</p>
+          <p className="text-sm text-muted-foreground">{desc}</p>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <StatusBadge connected={connected} />
+        <Button variant="outline" size="sm" onClick={onConnect}>{account ? 'Change' : 'Connect'}</Button>
+        {account && (
+          <Button variant="ghost" size="sm" className="text-destructive" onClick={onDisconnect}>Disconnect</Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function IntegrationsCard() {
   const { data: status, isLoading } = useIntegrationsStatus();
+  const { data: catalog = [] } = useIntegrationCatalog();
+  const connect = useConnectIntegration();
+  const disconnect = useDisconnectIntegration();
+  const [connecting, setConnecting] = useState(null); // 'sms' | 'email'
 
   const email = status?.email || {};
   const sms = status?.sms || {};
   const google = status?.google || {};
 
-  const rows = [
-    {
-      icon: Mail,
-      name: 'Email (Resend)',
-      connected: Boolean(email.configured),
-      desc: email.configured
-        ? 'Outbound email and campaigns are delivered through Resend.'
-        : 'Not configured. Set RESEND_API_KEY on the server to enable email.',
-    },
-    {
-      icon: MessageSquare,
-      name: 'SMS (Twilio)',
-      connected: Boolean(sms.configured),
-      desc: sms.configured
-        ? `Two-way SMS is delivered through Twilio${sms.from_number ? ` from ${sms.from_number}` : ''}.`
-        : 'Not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER to enable SMS.',
-    },
-    {
-      icon: CalendarDays,
-      name: 'Google Calendar',
-      connected: Boolean(google.connected),
-      configurable: true,
-      desc: google.connected
-        ? `Connected${google.email ? ` as ${google.email}` : ''}. Availability syncs and booked slots are blocked.`
-        : google.configured
-          ? 'Connect your calendar to sync availability and block booked slots.'
-          : 'Google OAuth is not configured on this server.',
-      to: '/calendar',
-    },
-  ];
+  const doDisconnect = async (kind) => {
+    if (await confirm({ title: `Disconnect ${kind}?`, description: 'Sending falls back to the server default (if configured).', confirmLabel: 'Disconnect' })) {
+      disconnect.mutate(kind);
+    }
+  };
 
   return (
     <Card>
@@ -287,30 +297,91 @@ function IntegrationsCard() {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Checking connections…</p>
         ) : (
-          rows.map((it) => (
-            <div key={it.name} className="flex items-center justify-between gap-3 rounded-md border p-4">
+          <>
+            <ChannelRow icon={Mail} title="Email" kind="email" state={email} onConnect={() => setConnecting('email')} onDisconnect={() => doDisconnect('email')} />
+            <ChannelRow icon={MessageSquare} title="SMS" kind="sms" state={sms} onConnect={() => setConnecting('sms')} onDisconnect={() => doDisconnect('sms')} />
+
+            <div className="flex items-center justify-between gap-3 rounded-md border p-4">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary">
-                  <it.icon className="h-4 w-4" />
-                </div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary"><CalendarDays className="h-4 w-4" /></div>
                 <div>
-                  <p className="text-sm font-medium">{it.name}</p>
-                  <p className="text-sm text-muted-foreground">{it.desc}</p>
+                  <p className="text-sm font-medium">Google Calendar</p>
+                  <p className="text-sm text-muted-foreground">
+                    {google.connected
+                      ? `Connected${google.email ? ` as ${google.email}` : ''}. Availability syncs and booked slots are blocked.`
+                      : 'Connect your calendar to sync availability and block booked slots.'}
+                  </p>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <StatusBadge connected={it.connected} />
-                {it.configurable && (
-                  <Button asChild variant="outline" size="sm">
-                    <Link to={it.to}>{it.connected ? 'Manage' : 'Connect'} <ArrowRight className="h-3 w-3" /></Link>
-                  </Button>
-                )}
+                <StatusBadge connected={Boolean(google.connected)} />
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/calendar">{google.connected ? 'Manage' : 'Connect'} <ArrowRight className="h-3 w-3" /></Link>
+                </Button>
               </div>
             </div>
-          ))
+          </>
         )}
       </CardContent>
+
+      {connecting && (
+        <ConnectDialog
+          kind={connecting}
+          providers={catalog.filter((c) => c.kind === connecting)}
+          pending={connect.isPending}
+          onClose={() => setConnecting(null)}
+          onConnect={(body) => connect.mutate(body, { onSuccess: () => setConnecting(null) })}
+        />
+      )}
     </Card>
+  );
+}
+
+function ConnectDialog({ kind, providers, onClose, onConnect, pending }) {
+  const [provider, setProvider] = useState(providers[0]?.provider || '');
+  const [from, setFrom] = useState('');
+  const [config, setConfig] = useState({});
+  const spec = providers.find((p) => p.provider === provider);
+
+  const submit = (e) => {
+    e.preventDefault();
+    onConnect({ kind, provider, from, config });
+  };
+
+  return (
+    <Dialog open onClose={onClose} title={`Connect ${kind === 'sms' ? 'SMS' : 'email'} provider`} description="Your credentials are encrypted and used only for your account.">
+      <form className="space-y-3" onSubmit={submit}>
+        <div className="space-y-1">
+          <Label>Provider</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={provider}
+            onChange={(e) => { setProvider(e.target.value); setConfig({}); }}
+          >
+            {providers.map((p) => <option key={p.provider} value={p.provider}>{p.label}</option>)}
+          </select>
+        </div>
+        {(spec?.fields || []).map((f) => (
+          <div key={f} className="space-y-1">
+            <Label className="capitalize">{f.replace(/_/g, ' ')}</Label>
+            <Input
+              type="password"
+              autoComplete="off"
+              value={config[f] || ''}
+              onChange={(e) => setConfig((c) => ({ ...c, [f]: e.target.value }))}
+            />
+          </div>
+        ))}
+        <div className="space-y-1">
+          <Label>From</Label>
+          <Input placeholder={spec?.from_hint || ''} value={from} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={pending}>{pending ? 'Connecting…' : 'Connect'}</Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 

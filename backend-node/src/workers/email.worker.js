@@ -1,15 +1,14 @@
 const { Worker } = require('bullmq');
-const { Resend } = require('resend');
 const { createBullConnection } = require('../redis/client');
-const config = require('../config');
 const logger = require('../logger');
 const pool = require('../db');
 const { publishEvent } = require('../events/publisher');
+const { getAccountIntegration } = require('../providers/account');
+const { sendEmail } = require('../providers/email');
 
-const resend = config.resendApiKey ? new Resend(config.resendApiKey) : null;
-
-// startEmailWorker consumes email:send jobs and sends via Resend, then updates
-// the message row and notifies the account room.
+// startEmailWorker consumes email:send jobs and sends via the account's own
+// email provider (or the server fallback), then updates the message row and
+// notifies the account room.
 function startEmailWorker() {
   const worker = new Worker(
     'email',
@@ -17,15 +16,9 @@ function startEmailWorker() {
       const { accountID, data } = job.data;
       logger.info({ jobId: job.id, accountID }, 'email:send start');
 
-      if (!resend) throw new Error('RESEND_API_KEY not configured');
-
       const { to, subject, html, messageId, tags } = data;
-      const payload = { from: config.resendFrom, to, subject, html };
-      // Tags (campaign_id, contact_id) let the Resend webhook attribute
-      // opens/clicks back to a specific campaign recipient.
-      if (Array.isArray(tags) && tags.length > 0) payload.tags = tags;
-      const result = await resend.emails.send(payload);
-      const externalId = result?.data?.id || null;
+      const integration = await getAccountIntegration(accountID, 'email');
+      const externalId = await sendEmail(integration, { to, subject, html, tags });
 
       if (messageId) {
         await pool.query(

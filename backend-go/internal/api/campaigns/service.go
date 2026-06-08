@@ -113,14 +113,21 @@ func (s *Service) Recipients(ctx context.Context, accountID, campaignID uuid.UUI
 func validate(c *models.Campaign) error {
 	c.Name = strings.TrimSpace(c.Name)
 	c.Subject = strings.TrimSpace(c.Subject)
+	if c.Channel == "" {
+		c.Channel = "email"
+	}
+	if c.Channel != "email" && c.Channel != "sms" {
+		return fmt.Errorf("campaigns.validate: %w: channel must be email or sms", ErrValidation)
+	}
 	if c.Name == "" {
 		return fmt.Errorf("campaigns.validate: %w: name is required", ErrValidation)
 	}
-	if c.Subject == "" {
+	// Subject only applies to email; SMS has no subject line.
+	if c.Channel == "email" && c.Subject == "" {
 		return fmt.Errorf("campaigns.validate: %w: subject is required", ErrValidation)
 	}
 	if strings.TrimSpace(c.BodyHTML) == "" {
-		return fmt.Errorf("campaigns.validate: %w: body is required", ErrValidation)
+		return fmt.Errorf("campaigns.validate: %w: message body is required", ErrValidation)
 	}
 	return nil
 }

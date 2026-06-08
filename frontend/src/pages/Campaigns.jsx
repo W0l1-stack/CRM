@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Trash2, Send, Mail, BarChart3, Pencil } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus, Trash2, Send, Mail, MessageSquare, BarChart3, Pencil } from 'lucide-react';
 import {
   useCampaigns,
   useSendCampaign,
@@ -10,15 +10,48 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog } from '@/components/ui/dialog';
 import { CardsSkeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/EmptyState';
 import { confirm } from '@/store/confirm.store';
+import { cn } from '@/lib/utils';
 
 const statusVariant = { sent: 'default', sending: 'secondary', draft: 'outline', scheduled: 'secondary' };
+
+function TypePicker({ onClose }) {
+  const navigate = useNavigate();
+  const types = [
+    { value: 'email', label: 'Email Campaign', icon: Mail, tag: 'Popular', desc: 'Compose a rich email with drag-and-drop blocks and track opens & clicks.', color: 'border-blue-300 bg-blue-50 text-blue-700' },
+    { value: 'sms', label: 'SMS Campaign', icon: MessageSquare, tag: 'Fast', desc: 'Send a text message straight to your contacts’ phones via Twilio.', color: 'border-emerald-300 bg-emerald-50 text-emerald-700' },
+  ];
+  return (
+    <Dialog open onClose={onClose} title="Create a new campaign" description="Pick the type of campaign you want to send.">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {types.map((t) => (
+          <button
+            key={t.value}
+            onClick={() => navigate(`/campaigns/new?type=${t.value}`)}
+            className="group flex flex-col gap-2 rounded-lg border p-4 text-left transition-all hover:border-primary hover:shadow-sm"
+          >
+            <div className="flex items-center justify-between">
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-md border', t.color)}>
+                <t.icon className="h-5 w-5" />
+              </div>
+              <Badge variant="secondary">{t.tag}</Badge>
+            </div>
+            <p className="font-semibold">{t.label}</p>
+            <p className="text-sm text-muted-foreground">{t.desc}</p>
+          </button>
+        ))}
+      </div>
+    </Dialog>
+  );
+}
 
 export default function Campaigns() {
   const { data: campaigns = [], isLoading } = useCampaigns();
   const deleteCampaign = useDeleteCampaign();
+  const [picking, setPicking] = useState(false);
 
   const remove = async (c) => {
     if (
@@ -35,14 +68,14 @@ export default function Campaigns() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Email Campaigns</h1>
-        <Button asChild>
-          <Link to="/campaigns/new">
-            <Plus className="h-4 w-4" />
-            New campaign
-          </Link>
+        <h1 className="text-2xl font-semibold">Campaigns</h1>
+        <Button onClick={() => setPicking(true)}>
+          <Plus className="h-4 w-4" />
+          New campaign
         </Button>
       </div>
+
+      {picking && <TypePicker onClose={() => setPicking(false)} />}
 
       {isLoading ? (
         <CardsSkeleton count={3} />
@@ -50,13 +83,11 @@ export default function Campaigns() {
         <EmptyState
           icon={Mail}
           title="Send your first campaign"
-          description="Compose an email with drag-and-drop blocks, pick a smart-list audience, and track opens and clicks. An unsubscribe link is added automatically."
+          description="Send an email (drag-and-drop blocks, open/click tracking) or an SMS blast to a tagged audience."
           action={
-            <Button asChild>
-              <Link to="/campaigns/new">
-                <Plus className="h-4 w-4" />
-                New campaign
-              </Link>
+            <Button onClick={() => setPicking(true)}>
+              <Plus className="h-4 w-4" />
+              New campaign
             </Button>
           }
         />
@@ -66,10 +97,11 @@ export default function Campaigns() {
             <Card key={c.id}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-primary" />
+                  {c.channel === 'sms' ? <MessageSquare className="h-4 w-4 text-emerald-600" /> : <Mail className="h-4 w-4 text-primary" />}
                   <Link to={`/campaigns/${c.id}`} className="hover:underline">
                     <CardTitle className="text-base">{c.name}</CardTitle>
                   </Link>
+                  <Badge variant="outline" className="uppercase">{c.channel || 'email'}</Badge>
                   <Badge variant={statusVariant[c.status] || 'outline'}>{c.status}</Badge>
                   {c.stats?.sent ? (
                     <span className="text-xs text-muted-foreground">

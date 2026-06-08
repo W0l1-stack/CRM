@@ -1,18 +1,14 @@
 const { Worker } = require('bullmq');
-const twilio = require('twilio');
 const { createBullConnection } = require('../redis/client');
-const config = require('../config');
 const logger = require('../logger');
 const pool = require('../db');
 const { publishEvent } = require('../events/publisher');
+const { getAccountIntegration } = require('../providers/account');
+const { sendSms } = require('../providers/sms');
 
-const client =
-  config.twilio.accountSid && config.twilio.authToken
-    ? twilio(config.twilio.accountSid, config.twilio.authToken)
-    : null;
-
-// startSmsWorker consumes sms:send jobs and sends via Twilio, then updates the
-// message row and notifies the account room.
+// startSmsWorker consumes sms:send jobs and sends via the account's own SMS
+// provider (or the server fallback), then updates the message row and notifies
+// the account room.
 function startSmsWorker() {
   const worker = new Worker(
     'sms',
@@ -20,11 +16,9 @@ function startSmsWorker() {
       const { accountID, data } = job.data;
       logger.info({ jobId: job.id, accountID }, 'sms:send start');
 
-      if (!client) throw new Error('Twilio credentials not configured');
-
       const { to, body, messageId } = data;
-      const sent = await client.messages.create({ from: config.twilio.fromNumber, to, body });
-      const externalId = sent.sid;
+      const integration = await getAccountIntegration(accountID, 'sms');
+      const externalId = await sendSms(integration, { to, body });
 
       if (messageId) {
         await pool.query(

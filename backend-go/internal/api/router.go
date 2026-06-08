@@ -159,8 +159,13 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/automations/{id}", automationHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/automations/{id}", middleware.RequireManager(automationHandler.Delete)).Methods(http.MethodDelete)
 
-	integrationsHandler := integrations.NewHandler(cfg, googleSvc)
+	integrationsHandler := integrations.NewHandler(cfg, googleSvc, integrations.NewService(integrations.NewRepository(pool, cfg.JWTSecret)))
 	protected.HandleFunc("/integrations/status", integrationsHandler.Status).Methods(http.MethodGet)
+	protected.HandleFunc("/integrations/catalog", integrationsHandler.Catalog).Methods(http.MethodGet)
+	protected.HandleFunc("/integrations/connections", integrationsHandler.Connections).Methods(http.MethodGet)
+	// Connecting/disconnecting a provider is an owner/admin action.
+	protected.HandleFunc("/integrations/connections", middleware.RequireManager(integrationsHandler.Connect)).Methods(http.MethodPost)
+	protected.HandleFunc("/integrations/connections/{kind}", middleware.RequireManager(integrationsHandler.Disconnect)).Methods(http.MethodDelete)
 	protected.HandleFunc("/integrations/google/auth-url", googleHandler.AuthURL).Methods(http.MethodGet)
 	protected.HandleFunc("/integrations/google/status", googleHandler.Status).Methods(http.MethodGet)
 	protected.HandleFunc("/integrations/google", googleHandler.Disconnect).Methods(http.MethodDelete)

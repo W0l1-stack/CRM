@@ -6,11 +6,13 @@ const { enqueueEmail } = require('../queues/email.queue');
 const { enqueueSms } = require('../queues/sms.queue');
 const { publishEvent } = require('../events/publisher');
 
-// Minimal {{contact.field}} substitution for action templates.
+// {{contact.field}} / {{field}} substitution for action templates. Accepts the
+// short form ({{name}}, {{company_name}}) used in the SMS/email composers.
 function render(template, contact) {
-  return String(template || '').replace(/\{\{\s*contact\.(\w+)\s*\}\}/g, (_m, key) =>
-    contact && contact[key] != null ? String(contact[key]) : ''
-  );
+  return String(template || '').replace(/\{\{\s*(?:contact\.)?(\w+)\s*\}\}/g, (_m, key) => {
+    const k = key === 'company_name' ? 'company' : key === 'full_name' ? 'name' : key;
+    return contact && contact[k] != null ? String(contact[k]) : '';
+  });
 }
 
 async function findOrCreateConversation(accountID, contactId, channel) {
