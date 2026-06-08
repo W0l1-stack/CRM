@@ -30,7 +30,8 @@ var validActions = map[string]bool{
 	"send_sms":   true,
 	"add_tag":    true,
 	"wait":       true,
-	"branch":     true, // multi-way condition; nested actions live in config.cases/default
+	"branch":     true, // multi-way data condition; nested actions in config.cases/default
+	"wait_event": true, // response branch: waits for reply/click; on_event/on_timeout paths
 }
 
 type Service struct {

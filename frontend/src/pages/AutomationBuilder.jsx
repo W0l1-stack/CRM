@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, Zap, Mail, MessageSquare, Tag, Clock, GitBranch, Plus, Trash2, GripVertical, ArrowDown,
+  ArrowLeft, Zap, Mail, MessageSquare, Tag, Clock, GitBranch, Reply, Plus, Trash2, GripVertical, ArrowDown,
 } from 'lucide-react';
 import {
   useAutomation, useCreateAutomation, useUpdateAutomation,
@@ -27,8 +27,10 @@ const LEAF_TYPES = [
   { value: 'wait', label: 'Wait', icon: Clock, color: 'bg-amber-100 text-amber-700' },
 ];
 const BRANCH_TYPE = { value: 'branch', label: 'Branch (if / then)', icon: GitBranch, color: 'bg-rose-100 text-rose-700' };
-const PALETTE = [...LEAF_TYPES, BRANCH_TYPE];
-const actionMeta = (type) => [...LEAF_TYPES, BRANCH_TYPE].find((a) => a.value === type) || LEAF_TYPES[0];
+const WAIT_EVENT_TYPE = { value: 'wait_event', label: 'Wait for reply / click', icon: Reply, color: 'bg-cyan-100 text-cyan-700' };
+const SPECIAL_TYPES = [BRANCH_TYPE, WAIT_EVENT_TYPE];
+const PALETTE = [...LEAF_TYPES, ...SPECIAL_TYPES];
+const actionMeta = (type) => [...LEAF_TYPES, ...SPECIAL_TYPES].find((a) => a.value === type) || LEAF_TYPES[0];
 
 const CONDITION_FIELDS = [
   { value: 'tags', label: 'Tag' },
@@ -49,8 +51,12 @@ const OPERATORS = [
 const noValueOp = (op) => op === 'not_empty' || op === 'empty';
 
 const newCase = () => ({ label: '', field: 'tags', op: 'has_tag', value: '', actions: [] });
-const newAction = (type) =>
-  type === 'branch' ? { type, config: { cases: [newCase()], default: [] } } : { type, config: {} };
+const newAction = (type) => {
+  if (type === 'branch') return { type, config: { cases: [newCase()], default: [] } };
+  if (type === 'wait_event') return { type, config: { event: 'replied', timeout_days: 2 }, on_event: [], on_timeout: [] };
+  return { type, config: {} };
+};
+const isSpecial = (type) => type === 'branch' || type === 'wait_event';
 
 const selectClass = 'flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm';
 
@@ -192,7 +198,7 @@ export default function AutomationBuilder() {
               <Connector />
               <div
                 className="w-full"
-                draggable={action.type !== 'branch'}
+                draggable={!isSpecial(action.type)}
                 onDragStart={() => setDragIdx(idx)}
                 onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
                 onDragOver={(e) => { e.preventDefault(); if (overIdx !== idx) setOverIdx(idx); }}
@@ -200,6 +206,14 @@ export default function AutomationBuilder() {
               >
                 {action.type === 'branch' ? (
                   <BranchCard
+                    action={action}
+                    dragging={dragIdx === idx}
+                    over={overIdx === idx && dragIdx !== null}
+                    onChange={(next) => patchAction(idx, next)}
+                    onRemove={() => removeAction(idx)}
+                  />
+                ) : action.type === 'wait_event' ? (
+                  <WaitEventCard
                     action={action}
                     dragging={dragIdx === idx}
                     over={overIdx === idx && dragIdx !== null}
@@ -353,6 +367,59 @@ function BranchCard({ action, dragging, over, onChange, onRemove }) {
           </span>
           <div className="border-l-2 border-border pl-3">
             <NestedActions actions={def} onChange={(actions) => setConfig({ default: actions })} />
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// Response branch: pause the journey until the contact replies (SMS) or clicks
+// (email), then run the matching path — or the timeout path if they don't.
+function WaitEventCard({ action, dragging, over, onChange, onRemove }) {
+  const cfg = action.config || {};
+  const onEvent = Array.isArray(action.on_event) ? action.on_event : [];
+  const onTimeout = Array.isArray(action.on_timeout) ? action.on_timeout : [];
+  const setConfig = (patch) => onChange({ ...action, config: { ...cfg, ...patch } });
+
+  return (
+    <Card className={cn('w-full border-cyan-200 p-4 transition-all', dragging && 'opacity-50', over && 'ring-2 ring-primary')}>
+      <div className="mb-3 flex items-center gap-2">
+        <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground" />
+        <div className={cn('flex h-7 w-7 items-center justify-center rounded-full', WAIT_EVENT_TYPE.color)}>
+          <Reply className="h-4 w-4" />
+        </div>
+        <span className="flex-1 text-sm font-medium">Wait for the contact to respond</span>
+        <Button variant="ghost" size="icon" onClick={onRemove}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">Wait for</label>
+          <select className={selectClass} value={cfg.event || 'replied'} onChange={(e) => setConfig({ event: e.target.value })}>
+            <option value="replied">Reply to SMS</option>
+            <option value="clicked">Click an email link</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">Give up after (days)</label>
+          <Input type="number" min="1" className="h-9" value={cfg.timeout_days ?? 2} onChange={(e) => setConfig({ timeout_days: Number(e.target.value) })} />
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-3">
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <span className="mb-2 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">If they respond</span>
+          <div className="border-l-2 border-emerald-200 pl-3">
+            <NestedActions actions={onEvent} onChange={(a) => onChange({ ...action, on_event: a })} />
+          </div>
+        </div>
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <span className="mb-2 inline-block rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">If no response (timeout)</span>
+          <div className="border-l-2 border-border pl-3">
+            <NestedActions actions={onTimeout} onChange={(a) => onChange({ ...action, on_timeout: a })} />
           </div>
         </div>
       </div>

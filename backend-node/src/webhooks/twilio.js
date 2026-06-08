@@ -4,6 +4,7 @@ const pool = require('../db');
 const config = require('../config');
 const logger = require('../logger');
 const { publishEvent } = require('../events/publisher');
+const { handleContactEvent } = require('../automation/journey');
 
 const router = express.Router();
 
@@ -78,6 +79,9 @@ router.post('/twilio/sms', express.urlencoded({ extended: false }), async (req, 
         created_at: msg.rows[0].created_at,
       },
     });
+
+    // Resume any journey runs waiting for this contact to reply.
+    await handleContactEvent(accountID, contactId, 'replied');
 
     logger.info({ accountID, conversationId, from }, 'inbound sms stored and broadcast');
     res.type('text/xml').send('<Response/>');

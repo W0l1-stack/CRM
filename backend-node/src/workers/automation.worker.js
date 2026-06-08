@@ -5,15 +5,7 @@ const pool = require('../db');
 const { enqueueEmail } = require('../queues/email.queue');
 const { enqueueSms } = require('../queues/sms.queue');
 const { publishEvent } = require('../events/publisher');
-
-// {{contact.field}} / {{field}} substitution for action templates. Accepts the
-// short form ({{name}}, {{company_name}}) used in the SMS/email composers.
-function render(template, contact) {
-  return String(template || '').replace(/\{\{\s*(?:contact\.)?(\w+)\s*\}\}/g, (_m, key) => {
-    const k = key === 'company_name' ? 'company' : key === 'full_name' ? 'name' : key;
-    return contact && contact[k] != null ? String(contact[k]) : '';
-  });
-}
+const { render } = require('../automation/util');
 
 async function findOrCreateConversation(accountID, contactId, channel) {
   const existing = await pool.query(
@@ -52,7 +44,12 @@ async function executeAction(accountID, action, contact) {
          VALUES ($1, $2, 'outbound', 'email', $3, 'queued') RETURNING id`,
         [accountID, conversationId, html]
       );
-      await enqueueEmail({ accountID, data: { to: contact.email, subject, html, messageId: msg.rows[0].id } });
+      // Tag with contact_id so an email click can resume a "wait for click"
+      // response branch (the Resend webhook maps the tag back to the contact).
+      await enqueueEmail({
+        accountID,
+        data: { to: contact.email, subject, html, messageId: msg.rows[0].id, tags: [{ name: 'contact_id', value: String(contact.id) }] },
+      });
       return;
     }
     case 'send_sms': {

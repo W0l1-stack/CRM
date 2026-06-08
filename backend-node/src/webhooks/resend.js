@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const logger = require('../logger');
 const { publishEvent } = require('../events/publisher');
+const { handleContactEvent } = require('../automation/journey');
 
 const router = express.Router();
 
@@ -75,6 +76,15 @@ router.post('/resend', express.json(), async (req, res) => {
     // Campaign open/click tracking (tagged emails).
     if (type === 'email.opened' || type === 'email.clicked') {
       await trackCampaignEvent(type, data);
+    }
+
+    // Resume journey runs waiting for an email click by this contact.
+    if (type === 'email.clicked') {
+      const contactId = tagValue(data, 'contact_id');
+      if (contactId) {
+        const acc = await pool.query('SELECT account_id FROM contacts WHERE id = $1', [contactId]);
+        if (acc.rowCount > 0) await handleContactEvent(acc.rows[0].account_id, contactId, 'clicked');
+      }
     }
 
     // Transactional message status (inbox emails carry no campaign tags).
