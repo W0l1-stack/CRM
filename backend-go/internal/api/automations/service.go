@@ -30,6 +30,7 @@ var validActions = map[string]bool{
 	"send_sms":   true,
 	"add_tag":    true,
 	"wait":       true,
+	"branch":     true, // multi-way condition; nested actions live in config.cases/default
 }
 
 type Service struct {

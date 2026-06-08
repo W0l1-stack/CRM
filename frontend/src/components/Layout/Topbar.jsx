@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Menu, Search, CornerUpLeft } from 'lucide-react';
+import { LogOut, Menu, PanelLeft, Search, CornerUpLeft } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useUIStore } from '@/store/ui.store';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ export default function Topbar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const toggleSidebarCollapsed = useUIStore((s) => s.toggleSidebarCollapsed);
   const toggleCommand = useUIStore((s) => s.toggleCommand);
   const inSubAccount = Boolean(getAgencyStash());
 
@@ -21,12 +22,21 @@ export default function Topbar() {
   return (
     <header className="flex h-16 items-center justify-between gap-4 border-b bg-card px-4 md:px-6">
       <div className="flex items-center gap-2">
+        {/* Mobile: open the drawer */}
         <button
           className="rounded-md p-2 text-muted-foreground hover:bg-secondary md:hidden"
           onClick={toggleSidebar}
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
+        </button>
+        {/* Desktop: collapse/expand the sidebar */}
+        <button
+          className="hidden rounded-md p-2 text-muted-foreground hover:bg-secondary md:inline-flex"
+          onClick={toggleSidebarCollapsed}
+          aria-label="Toggle sidebar"
+        >
+          <PanelLeft className="h-5 w-5" />
         </button>
         {inSubAccount && (
           <Button variant="outline" size="sm" onClick={returnToAgency}>

@@ -2,26 +2,28 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Heading, Type, MousePointerClick, Image as ImageIcon, Minus,
-  GripVertical, Trash2, Users, Send,
+  GripVertical, Trash2, Copy, ArrowUp, ArrowDown, Users, Send, Mail, Tag,
 } from 'lucide-react';
 import { useCampaign, useCreateCampaign, useUpdateCampaign, useSendCampaign } from '@/hooks/useCampaigns';
 import { useContacts } from '@/hooks/useContacts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { PageSpinner } from '@/components/ui/spinner';
 import { confirm } from '@/store/confirm.store';
 import { compileEmail, parseBlocks, blockDefaults } from '@/lib/emailBlocks';
 import { cn } from '@/lib/utils';
 
 const BLOCK_TYPES = [
-  { value: 'heading', label: 'Heading', icon: Heading },
-  { value: 'text', label: 'Text', icon: Type },
-  { value: 'button', label: 'Button', icon: MousePointerClick },
-  { value: 'image', label: 'Image', icon: ImageIcon },
-  { value: 'divider', label: 'Divider', icon: Minus },
+  { value: 'heading', label: 'Heading', icon: Heading, color: 'bg-blue-100 text-blue-700' },
+  { value: 'text', label: 'Text', icon: Type, color: 'bg-slate-100 text-slate-700' },
+  { value: 'button', label: 'Button', icon: MousePointerClick, color: 'bg-emerald-100 text-emerald-700' },
+  { value: 'image', label: 'Image', icon: ImageIcon, color: 'bg-violet-100 text-violet-700' },
+  { value: 'divider', label: 'Divider', icon: Minus, color: 'bg-amber-100 text-amber-700' },
 ];
+const blockMeta = (t) => BLOCK_TYPES.find((b) => b.value === t) || BLOCK_TYPES[1];
 
 const DEFAULT_BLOCKS = [
   { type: 'heading', text: 'Hi {{contact.name}},' },
@@ -42,6 +44,7 @@ export default function CampaignBuilder() {
   const [subject, setSubject] = useState('');
   const [tag, setTag] = useState('');
   const [blocks, setBlocks] = useState(DEFAULT_BLOCKS);
+  const [selected, setSelected] = useState(0);
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);
 
@@ -57,18 +60,31 @@ export default function CampaignBuilder() {
     }
   }, [existing]);
 
-  // Audience estimate from the loaded contacts (subscribed, optionally tagged).
   const audienceCount = useMemo(() => {
     const subscribed = contacts.filter((c) => !c.is_unsubscribed);
     if (!tag.trim()) return subscribed.length;
     return subscribed.filter((c) => (c.tags || []).includes(tag.trim())).length;
   }, [contacts, tag]);
 
+  const allTags = useMemo(() => {
+    const set = new Set();
+    contacts.forEach((c) => (c.tags || []).forEach((t) => set.add(t)));
+    return [...set].sort();
+  }, [contacts]);
+
   if (!isNew && isLoading) return <PageSpinner label="Loading campaign…" />;
 
-  const addBlock = (type) => setBlocks((arr) => [...arr, blockDefaults(type)]);
+  const addBlock = (type) => setBlocks((arr) => { setSelected(arr.length); return [...arr, blockDefaults(type)]; });
   const setBlock = (i, patch) => setBlocks((arr) => arr.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
-  const removeBlock = (i) => setBlocks((arr) => arr.filter((_, idx) => idx !== i));
+  const removeBlock = (i) => { setBlocks((arr) => arr.filter((_, idx) => idx !== i)); setSelected(-1); };
+  const duplicateBlock = (i) => setBlocks((arr) => [...arr.slice(0, i + 1), { ...arr[i] }, ...arr.slice(i + 1)]);
+  const moveBlock = (i, dir) => setBlocks((arr) => {
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return arr;
+    const next = [...arr];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
   const onDrop = (target) => {
     setOverIdx(null);
     if (dragIdx === null || dragIdx === target) return setDragIdx(null);
@@ -98,46 +114,33 @@ export default function CampaignBuilder() {
   };
 
   const saveAndSend = async () => {
-    if (
-      !(await confirm({
-        title: 'Send campaign now?',
-        description: `This emails ${audienceCount} contact(s)${tag.trim() ? ` tagged "${tag.trim()}"` : ''}. This cannot be undone.`,
-        confirmLabel: 'Send now',
-        variant: 'default',
-      }))
-    ) {
-      return;
-    }
-    saveDraft((c) => {
-      const cid = c?.id || id;
-      sendCampaign.mutate(cid, { onSuccess: () => navigate('/campaigns') });
-    });
+    if (!(await confirm({
+      title: 'Send campaign now?',
+      description: `This emails ${audienceCount} contact(s)${tag.trim() ? ` tagged "${tag.trim()}"` : ''}. This cannot be undone.`,
+      confirmLabel: 'Send now',
+      variant: 'default',
+    }))) return;
+    saveDraft((c) => sendCampaign.mutate(c?.id || id, { onSuccess: () => navigate('/campaigns') }));
   };
 
   const saving = createCampaign.isPending || updateCampaign.isPending;
 
   return (
     <div className="space-y-4">
-      <Button asChild variant="ghost" size="sm">
-        <Link to="/campaigns">
-          <ArrowLeft className="h-4 w-4" /> Back to campaigns
-        </Link>
-      </Button>
-
-      {locked && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          This campaign has already been {existing.status}. It’s read-only.
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button asChild variant="ghost" size="icon">
+            <Link to="/campaigns"><ArrowLeft className="h-4 w-4" /></Link>
+          </Button>
+          <Input
+            placeholder="Untitled campaign"
+            className="w-64 text-lg font-semibold"
+            value={name}
+            disabled={locked}
+            onChange={(e) => setName(e.target.value)}
+          />
+          {existing && <Badge variant="secondary" className="capitalize">{existing.status}</Badge>}
         </div>
-      )}
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Input
-          placeholder="Campaign name"
-          className="max-w-sm text-lg font-semibold"
-          value={name}
-          disabled={locked}
-          onChange={(e) => setName(e.target.value)}
-        />
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => saveDraft()} disabled={saving || locked}>
             {saving ? 'Saving…' : 'Save draft'}
@@ -148,83 +151,118 @@ export default function CampaignBuilder() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Composer */}
+      {locked && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          This campaign was already {existing.status} — it’s read-only.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Left: setup + composer */}
         <div className="space-y-4">
-          <Card>
-            <CardContent className="space-y-3 pt-4">
-              <div className="space-y-1">
-                <Label>Subject line</Label>
-                <Input value={subject} disabled={locked} onChange={(e) => setSubject(e.target.value)} placeholder="A subject that gets opened" />
+          <Card className="space-y-4 p-4">
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> Subject line</Label>
+              <Input value={subject} disabled={locked} onChange={(e) => setSubject(e.target.value)} placeholder="A subject that gets opened" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Audience</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  list="campaign-tags"
+                  value={tag}
+                  disabled={locked}
+                  onChange={(e) => setTag(e.target.value)}
+                  placeholder="All subscribed contacts (or type a tag)"
+                />
+                <datalist id="campaign-tags">
+                  {allTags.map((t) => <option key={t} value={t} />)}
+                </datalist>
+                <Badge variant="secondary" className="shrink-0 gap-1 px-3 py-1.5">
+                  <Users className="h-3.5 w-3.5" /> {audienceCount}
+                </Badge>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label>Audience tag (blank = all subscribed)</Label>
-                  <Input value={tag} disabled={locked} onChange={(e) => setTag(e.target.value)} placeholder="e.g. hot-lead" />
-                </div>
-                <div className="flex items-end">
-                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Users className="h-4 w-4" />
-                    {audienceCount} recipient(s)
-                  </p>
-                </div>
-              </div>
-            </CardContent>
+            </div>
           </Card>
 
-          <div className="space-y-3">
-            {blocks.map((block, idx) => (
-              <Card
-                key={idx}
-                draggable={!locked}
-                onDragStart={() => setDragIdx(idx)}
-                onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
-                onDragOver={(e) => { e.preventDefault(); if (overIdx !== idx) setOverIdx(idx); }}
-                onDrop={() => onDrop(idx)}
-                className={cn('p-3', dragIdx === idx && 'opacity-50', overIdx === idx && dragIdx !== null && 'ring-2 ring-primary')}
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  {!locked && <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground" />}
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{block.type}</span>
-                  {!locked && (
-                    <Button type="button" variant="ghost" size="icon" className="ml-auto" onClick={() => removeBlock(idx)}>
-                      <Trash2 className="h-4 w-4" />
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Content blocks</p>
+              {!locked && (
+                <div className="flex gap-1">
+                  {BLOCK_TYPES.map((t) => (
+                    <Button key={t.value} type="button" variant="outline" size="icon" className="h-8 w-8" title={`Add ${t.label}`} onClick={() => addBlock(t.value)}>
+                      <t.icon className="h-4 w-4" />
                     </Button>
-                  )}
+                  ))}
                 </div>
-                <BlockEditor block={block} disabled={locked} onChange={(patch) => setBlock(idx, patch)} />
-              </Card>
-            ))}
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {blocks.length === 0 && (
+                <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  Add a content block to start composing.
+                </div>
+              )}
+              {blocks.map((block, idx) => {
+                const meta = blockMeta(block.type);
+                const Icon = meta.icon;
+                return (
+                  <Card
+                    key={idx}
+                    draggable={!locked}
+                    onDragStart={() => setDragIdx(idx)}
+                    onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                    onDragOver={(e) => { e.preventDefault(); if (overIdx !== idx) setOverIdx(idx); }}
+                    onDrop={() => onDrop(idx)}
+                    className={cn(
+                      'p-3 transition-all',
+                      selected === idx && 'border-primary/50',
+                      dragIdx === idx && 'opacity-50',
+                      overIdx === idx && dragIdx !== null && 'ring-2 ring-primary'
+                    )}
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      {!locked && <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground" />}
+                      <span className={cn('flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', meta.color)}>
+                        <Icon className="h-3 w-3" /> {meta.label}
+                      </span>
+                      {!locked && (
+                        <div className="ml-auto flex items-center">
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => moveBlock(idx, -1)} disabled={idx === 0}>
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => moveBlock(idx, 1)} disabled={idx === blocks.length - 1}>
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateBlock(idx)}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeBlock(idx)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <BlockEditor block={block} disabled={locked} onChange={(patch) => setBlock(idx, patch)} />
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Sidebar: blocks palette + preview */}
-        <div className="space-y-4">
-          {!locked && (
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Add block</p>
-              <div className="grid grid-cols-2 gap-2">
-                {BLOCK_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    onClick={() => addBlock(t.value)}
-                    className="flex items-center gap-2 rounded-md border bg-card p-2 text-left text-sm font-medium transition-colors hover:bg-secondary"
-                  >
-                    <t.icon className="h-4 w-4 text-muted-foreground" /> {t.label}
-                  </button>
-                ))}
-              </div>
+        {/* Right: email-client style preview */}
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Preview</p>
+          <div className="overflow-hidden rounded-xl border bg-muted/40 shadow-sm">
+            <div className="border-b bg-card px-4 py-3">
+              <p className="text-sm font-semibold">{subject || 'No subject'}</p>
+              <p className="text-xs text-muted-foreground">From your workspace · to {audienceCount} recipient(s)</p>
             </div>
-          )}
-
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Preview</CardTitle></CardHeader>
-            <CardContent>
-              <div className="rounded-md border bg-white p-1">
-                <iframe title="Email preview" className="h-[420px] w-full rounded" srcDoc={compileEmail(blocks)} />
-              </div>
-            </CardContent>
-          </Card>
+            <iframe title="Email preview" className="h-[520px] w-full bg-white" srcDoc={compileEmail(blocks)} />
+          </div>
         </div>
       </div>
     </div>
@@ -260,7 +298,7 @@ function BlockEditor({ block, onChange, disabled }) {
         </div>
       );
     case 'divider':
-      return <div className="border-t" />;
+      return <p className="text-xs text-muted-foreground">A horizontal divider line.</p>;
     default:
       return null;
   }

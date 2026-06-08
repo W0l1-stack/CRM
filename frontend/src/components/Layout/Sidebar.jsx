@@ -20,6 +20,7 @@ const nav = [
 export default function Sidebar() {
   const open = useUIStore((s) => s.sidebarOpen);
   const setOpen = useUIStore((s) => s.setSidebarOpen);
+  const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const { isOwner } = usePermissions();
   // Agency (sub-accounts) is owner-only.
   const items = isOwner ? [...nav, { to: '/agency', label: 'Agency', icon: Building2 }] : nav;
@@ -39,7 +40,8 @@ export default function Sidebar() {
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r bg-card transition-transform duration-200',
           'md:static md:z-auto md:translate-x-0',
-          open ? 'translate-x-0' : '-translate-x-full'
+          open ? 'translate-x-0' : '-translate-x-full',
+          collapsed && 'md:hidden' // desktop collapse
         )}
       >
         <div className="flex h-16 items-center gap-2 border-b px-6">

@@ -9,6 +9,10 @@ export const useUIStore = create((set) => ({
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
+  // Desktop (md+) collapse: hides the sidebar to give pages full width.
+  sidebarCollapsed: false,
+  toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+
   commandOpen: false, // Cmd+K palette
   setCommandOpen: (commandOpen) => set({ commandOpen }),
   toggleCommand: () => set((s) => ({ commandOpen: !s.commandOpen })),
