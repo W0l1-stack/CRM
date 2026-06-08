@@ -2,6 +2,7 @@ const pool = require('../db');
 const logger = require('../logger');
 const { enqueueEmail } = require('../queues/email.queue');
 const { enqueueSms } = require('../queues/sms.queue');
+const { startRun } = require('../automation/journey');
 
 const apiBase = process.env.API_PUBLIC_URL || 'http://localhost:3001';
 
@@ -92,21 +93,56 @@ async function sendSmsCampaign(accountID, campaignId, camp, filter) {
   return sent;
 }
 
+// sendJourneyCampaign enrolls each matching contact into the campaign's
+// automation, which then runs per-contact as a journey (multi-step, branching).
+async function sendJourneyCampaign(accountID, campaignId, camp, filter) {
+  if (!camp.automation_id) return 0;
+  const autoRes = await pool.query(
+    `SELECT id, actions FROM automations WHERE account_id = $1 AND id = $2`,
+    [accountID, camp.automation_id]
+  );
+  if (autoRes.rowCount === 0) return 0;
+  const automation = autoRes.rows[0];
+
+  const params = [accountID];
+  let q = `SELECT id, name, email, phone, company, source, tags, custom_fields
+             FROM contacts WHERE account_id = $1 AND is_unsubscribed = FALSE`;
+  if (filter.tag) {
+    params.push(filter.tag);
+    q += ` AND $${params.length} = ANY(tags)`;
+  }
+  const recipients = await pool.query(q, params);
+
+  let sent = 0;
+  for (const contact of recipients.rows) {
+    await pool.query(
+      `INSERT INTO campaign_recipients (account_id, campaign_id, contact_id, email, phone, status)
+       VALUES ($1, $2, $3, $4, $5, 'sent')
+       ON CONFLICT (campaign_id, contact_id) DO UPDATE SET status = 'sent', sent_at = NOW()`,
+      [accountID, campaignId, contact.id, contact.email || null, contact.phone || null]
+    );
+    await startRun(accountID, automation, contact);
+    sent++;
+  }
+  return sent;
+}
+
 // sendCampaign resolves recipients and delivers via the campaign's channel
-// (email through Resend, SMS through Twilio), then marks it sent.
+// (email through the account's email provider, SMS through its SMS provider, or
+// a journey enrollment), then marks it sent.
 async function sendCampaign(accountID, campaignId) {
   const c = await pool.query(
-    `SELECT name, subject, body_html, channel, recipient_filter FROM campaigns WHERE account_id = $1 AND id = $2`,
+    `SELECT name, subject, body_html, channel, automation_id, recipient_filter FROM campaigns WHERE account_id = $1 AND id = $2`,
     [accountID, campaignId]
   );
   if (c.rowCount === 0) return;
   const camp = c.rows[0];
   const filter = camp.recipient_filter || {};
 
-  const sent =
-    camp.channel === 'sms'
-      ? await sendSmsCampaign(accountID, campaignId, camp, filter)
-      : await sendEmailCampaign(accountID, campaignId, camp, filter);
+  let sent;
+  if (camp.channel === 'journey') sent = await sendJourneyCampaign(accountID, campaignId, camp, filter);
+  else if (camp.channel === 'sms') sent = await sendSmsCampaign(accountID, campaignId, camp, filter);
+  else sent = await sendEmailCampaign(accountID, campaignId, camp, filter);
 
   await markSent(accountID, campaignId, sent);
   logger.info({ accountID, campaignId, channel: camp.channel || 'email', recipients: sent }, 'campaign queued for delivery');

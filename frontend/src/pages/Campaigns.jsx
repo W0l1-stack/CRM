@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Send, Mail, MessageSquare, BarChart3, Pencil } from 'lucide-react';
+import { Plus, Trash2, Send, Mail, MessageSquare, GitBranch, BarChart3, Pencil } from 'lucide-react';
 import {
   useCampaigns,
   useSendCampaign,
@@ -22,11 +22,12 @@ function TypePicker({ onClose }) {
   const navigate = useNavigate();
   const types = [
     { value: 'email', label: 'Email Campaign', icon: Mail, tag: 'Popular', desc: 'Compose a rich email with drag-and-drop blocks and track opens & clicks.', color: 'border-blue-300 bg-blue-50 text-blue-700' },
-    { value: 'sms', label: 'SMS Campaign', icon: MessageSquare, tag: 'Fast', desc: 'Send a text message straight to your contacts’ phones via Twilio.', color: 'border-emerald-300 bg-emerald-50 text-emerald-700' },
+    { value: 'sms', label: 'SMS Campaign', icon: MessageSquare, tag: 'Fast', desc: 'Send a text message straight to your contacts’ phones.', color: 'border-emerald-300 bg-emerald-50 text-emerald-700' },
+    { value: 'journey', label: 'Journey', icon: GitBranch, tag: 'Automated', desc: 'Enroll your audience into a multi-step automation (waits, branches, replies).', color: 'border-cyan-300 bg-cyan-50 text-cyan-700' },
   ];
   return (
     <Dialog open onClose={onClose} title="Create a new campaign" description="Pick the type of campaign you want to send.">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {types.map((t) => (
           <button
             key={t.value}
@@ -97,7 +98,7 @@ export default function Campaigns() {
             <Card key={c.id}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <div className="flex items-center gap-2">
-                  {c.channel === 'sms' ? <MessageSquare className="h-4 w-4 text-emerald-600" /> : <Mail className="h-4 w-4 text-primary" />}
+                  {c.channel === 'sms' ? <MessageSquare className="h-4 w-4 text-emerald-600" /> : c.channel === 'journey' ? <GitBranch className="h-4 w-4 text-cyan-600" /> : <Mail className="h-4 w-4 text-primary" />}
                   <Link to={`/campaigns/${c.id}`} className="hover:underline">
                     <CardTitle className="text-base">{c.name}</CardTitle>
                   </Link>

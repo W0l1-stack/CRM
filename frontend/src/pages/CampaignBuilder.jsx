@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Heading, Type, MousePointerClick, Image as ImageIcon, Minus,
-  GripVertical, Trash2, Copy, ArrowUp, ArrowDown, Users, Send, Mail, MessageSquare, Tag,
+  GripVertical, Trash2, Copy, ArrowUp, ArrowDown, Users, Send, Mail, MessageSquare, GitBranch, Tag,
 } from 'lucide-react';
 import { useCampaign, useCreateCampaign, useUpdateCampaign, useSendCampaign } from '@/hooks/useCampaigns';
 import { useContacts } from '@/hooks/useContacts';
+import { useAutomations } from '@/hooks/useAutomations';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,8 +51,11 @@ export default function CampaignBuilder() {
   const updateCampaign = useUpdateCampaign();
   const sendCampaign = useSendCampaign();
   const { data: contacts = [] } = useContacts();
+  const { data: automations = [] } = useAutomations();
 
-  const [channel, setChannel] = useState(searchParams.get('type') === 'sms' ? 'sms' : 'email');
+  const initialType = searchParams.get('type');
+  const [channel, setChannel] = useState(initialType === 'sms' || initialType === 'journey' ? initialType : 'email');
+  const [automationId, setAutomationId] = useState('');
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [tag, setTag] = useState('');
@@ -73,6 +77,7 @@ export default function CampaignBuilder() {
 
   const locked = existing && existing.status !== 'draft';
   const isSms = channel === 'sms';
+  const isJourney = channel === 'journey';
 
   useEffect(() => {
     if (existing) {
@@ -80,6 +85,7 @@ export default function CampaignBuilder() {
       setName(existing.name || '');
       setSubject(existing.subject || '');
       setTag(existing.recipient_filter?.tag || '');
+      setAutomationId(existing.automation_id || '');
       if ((existing.channel || 'email') === 'sms') {
         setSmsText(existing.body_html || '');
       } else {
@@ -91,10 +97,10 @@ export default function CampaignBuilder() {
 
   // Audience estimate: email needs an address, SMS needs a phone.
   const audienceCount = useMemo(() => {
-    const base = contacts.filter((c) => !c.is_unsubscribed && (isSms ? c.phone : c.email));
+    const base = contacts.filter((c) => !c.is_unsubscribed && (isJourney ? true : isSms ? c.phone : c.email));
     if (!tag.trim()) return base.length;
     return base.filter((c) => (c.tags || []).includes(tag.trim())).length;
-  }, [contacts, tag, isSms]);
+  }, [contacts, tag, isSms, isJourney]);
 
   const allTags = useMemo(() => {
     const set = new Set();
@@ -127,13 +133,11 @@ export default function CampaignBuilder() {
     setDragIdx(null);
   };
 
-  const buildBody = () => ({
-    name: name.trim() || 'Untitled campaign',
-    channel,
-    subject: isSms ? '' : subject.trim(),
-    body_html: isSms ? smsText : compileEmail(blocks),
-    recipient_filter: tag.trim() ? { tag: tag.trim() } : {},
-  });
+  const buildBody = () => {
+    const base = { name: name.trim() || 'Untitled campaign', channel, recipient_filter: tag.trim() ? { tag: tag.trim() } : {} };
+    if (isJourney) return { ...base, automation_id: automationId || null, subject: '', body_html: '' };
+    return { ...base, subject: isSms ? '' : subject.trim(), body_html: isSms ? smsText : compileEmail(blocks) };
+  };
 
   const saveDraft = (after) => {
     const body = buildBody();
@@ -155,8 +159,9 @@ export default function CampaignBuilder() {
   };
 
   const saving = createCampaign.isPending || updateCampaign.isPending;
-  const ChannelIcon = isSms ? MessageSquare : Mail;
+  const ChannelIcon = isJourney ? GitBranch : isSms ? MessageSquare : Mail;
   const segments = Math.max(1, Math.ceil((smsText.length || 1) / 160));
+  const cantSend = saving || sendCampaign.isPending || locked || audienceCount === 0 || (isJourney && !automationId);
 
   return (
     <div className="space-y-4">
@@ -181,8 +186,8 @@ export default function CampaignBuilder() {
           <Button variant="outline" onClick={() => saveDraft()} disabled={saving || locked}>
             {saving ? 'Saving…' : 'Save draft'}
           </Button>
-          <Button onClick={saveAndSend} disabled={saving || sendCampaign.isPending || locked || audienceCount === 0}>
-            <Send className="h-4 w-4" /> Save & send
+          <Button onClick={saveAndSend} disabled={cantSend}>
+            <Send className="h-4 w-4" /> {isJourney ? 'Save & enroll' : 'Save & send'}
           </Button>
         </div>
       </div>
@@ -197,7 +202,7 @@ export default function CampaignBuilder() {
         {/* Left: setup + composer */}
         <div className="space-y-4">
           <Card className="space-y-4 p-4">
-            {!isSms && (
+            {!isSms && !isJourney && (
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> Subject line</Label>
                 <Input value={subject} disabled={locked} onChange={(e) => setSubject(e.target.value)} placeholder="A subject that gets opened" />
@@ -221,7 +226,26 @@ export default function CampaignBuilder() {
             </div>
           </Card>
 
-          {isSms ? (
+          {isJourney ? (
+            <Card className="space-y-2 p-4">
+              <Label className="flex items-center gap-1.5"><GitBranch className="h-3.5 w-3.5" /> Automation to enroll into</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={automationId}
+                disabled={locked}
+                onChange={(e) => setAutomationId(e.target.value)}
+              >
+                <option value="">Select an automation…</option>
+                {automations.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Each contact in the audience starts this automation as a journey (its waits, branches and replies apply per contact).
+                {automations.length === 0 && ' Create an automation first.'}
+              </p>
+            </Card>
+          ) : isSms ? (
             <Card className="space-y-2 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label className="flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Message</Label>
@@ -310,7 +334,17 @@ export default function CampaignBuilder() {
         {/* Right: preview */}
         <div className="lg:sticky lg:top-4 lg:self-start">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Preview</p>
-          {isSms ? (
+          {isJourney ? (
+            <div className="rounded-xl border bg-muted/40 p-6 text-center">
+              <GitBranch className="mx-auto mb-2 h-8 w-8 text-cyan-600" />
+              <p className="text-sm font-medium">
+                Enrolls {audienceCount} contact(s){tag.trim() ? ` tagged "${tag.trim()}"` : ''}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                into {automations.find((a) => a.id === automationId)?.name || '— pick an automation —'}
+              </p>
+            </div>
+          ) : isSms ? (
             <div className="rounded-xl border bg-muted/40 p-6">
               <div className="mx-auto max-w-xs space-y-2">
                 <div className="whitespace-pre-line rounded-2xl rounded-bl-sm bg-emerald-500 px-4 py-2.5 text-sm leading-relaxed text-white shadow">

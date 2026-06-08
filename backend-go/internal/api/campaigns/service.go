@@ -116,11 +116,18 @@ func validate(c *models.Campaign) error {
 	if c.Channel == "" {
 		c.Channel = "email"
 	}
-	if c.Channel != "email" && c.Channel != "sms" {
-		return fmt.Errorf("campaigns.validate: %w: channel must be email or sms", ErrValidation)
+	if c.Channel != "email" && c.Channel != "sms" && c.Channel != "journey" {
+		return fmt.Errorf("campaigns.validate: %w: channel must be email, sms or journey", ErrValidation)
 	}
 	if c.Name == "" {
 		return fmt.Errorf("campaigns.validate: %w: name is required", ErrValidation)
+	}
+	// Journey campaigns enroll the audience into an automation; no subject/body.
+	if c.Channel == "journey" {
+		if c.AutomationID == nil {
+			return fmt.Errorf("campaigns.validate: %w: an automation is required for a journey campaign", ErrValidation)
+		}
+		return nil
 	}
 	// Subject only applies to email; SMS has no subject line.
 	if c.Channel == "email" && c.Subject == "" {

@@ -24,12 +24,12 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-const cols = `id, account_id, created_by, name, subject, body_html, channel, status, scheduled_at, sent_at, recipient_filter, stats, created_at, updated_at`
+const cols = `id, account_id, created_by, name, subject, body_html, channel, automation_id, status, scheduled_at, sent_at, recipient_filter, stats, created_at, updated_at`
 
 func scan(row pgx.Row) (*models.Campaign, error) {
 	var c models.Campaign
 	var filterRaw, statsRaw []byte
-	if err := row.Scan(&c.ID, &c.AccountID, &c.CreatedBy, &c.Name, &c.Subject, &c.BodyHTML, &c.Channel,
+	if err := row.Scan(&c.ID, &c.AccountID, &c.CreatedBy, &c.Name, &c.Subject, &c.BodyHTML, &c.Channel, &c.AutomationID,
 		&c.Status, &c.ScheduledAt, &c.SentAt, &filterRaw, &statsRaw, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -80,9 +80,9 @@ func (r *Repository) GetByID(ctx context.Context, accountID, id uuid.UUID) (*mod
 func (r *Repository) Create(ctx context.Context, accountID uuid.UUID, createdBy *uuid.UUID, c *models.Campaign) (*models.Campaign, error) {
 	filterJSON, _ := json.Marshal(orEmptyMap(c.RecipientFilter))
 	row := r.db.QueryRow(ctx,
-		`INSERT INTO campaigns (account_id, created_by, name, subject, body_html, channel, status, scheduled_at, recipient_filter)
-		 VALUES ($1, $2, $3, $4, $5, COALESCE(NULLIF($6,''),'email'), COALESCE(NULLIF($7,''),'draft'), $8, $9::jsonb) RETURNING `+cols,
-		accountID, createdBy, c.Name, c.Subject, c.BodyHTML, c.Channel, c.Status, c.ScheduledAt, string(filterJSON))
+		`INSERT INTO campaigns (account_id, created_by, name, subject, body_html, channel, automation_id, status, scheduled_at, recipient_filter)
+		 VALUES ($1, $2, $3, $4, $5, COALESCE(NULLIF($6,''),'email'), $7, COALESCE(NULLIF($8,''),'draft'), $9, $10::jsonb) RETURNING `+cols,
+		accountID, createdBy, c.Name, c.Subject, c.BodyHTML, c.Channel, c.AutomationID, c.Status, c.ScheduledAt, string(filterJSON))
 	created, err := scan(row)
 	if err != nil {
 		return nil, fmt.Errorf("campaigns.Create: %w", err)
@@ -93,9 +93,9 @@ func (r *Repository) Create(ctx context.Context, accountID uuid.UUID, createdBy 
 func (r *Repository) Update(ctx context.Context, accountID, id uuid.UUID, c *models.Campaign) (*models.Campaign, error) {
 	filterJSON, _ := json.Marshal(orEmptyMap(c.RecipientFilter))
 	row := r.db.QueryRow(ctx,
-		`UPDATE campaigns SET name = $3, subject = $4, body_html = $5, scheduled_at = $6, recipient_filter = $7::jsonb, updated_at = NOW()
+		`UPDATE campaigns SET name = $3, subject = $4, body_html = $5, automation_id = $6, scheduled_at = $7, recipient_filter = $8::jsonb, updated_at = NOW()
 		 WHERE account_id = $1 AND id = $2 RETURNING `+cols,
-		accountID, id, c.Name, c.Subject, c.BodyHTML, c.ScheduledAt, string(filterJSON))
+		accountID, id, c.Name, c.Subject, c.BodyHTML, c.AutomationID, c.ScheduledAt, string(filterJSON))
 	updated, err := scan(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
