@@ -163,7 +163,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, publisher *events.Publish
 	protected.HandleFunc("/automations/{id}", automationHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/automations/{id}", middleware.RequireManager(automationHandler.Delete)).Methods(http.MethodDelete)
 
-	intgRepo := integrations.NewRepository(pool, cfg.JWTSecret)
+	intgRepo := integrations.NewRepository(pool, cfg.IntegrationsEncKey)
 	integrationsHandler := integrations.NewHandler(cfg, googleSvc, integrations.NewService(intgRepo))
 	protected.HandleFunc("/integrations/status", integrationsHandler.Status).Methods(http.MethodGet)
 

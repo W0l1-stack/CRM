@@ -1,7 +1,8 @@
 // Package crypto provides symmetric encryption for credentials stored at rest
 // (account integration secrets). It uses AES-256-GCM with a key derived from a
-// shared secret (JWT_SECRET) so the Node service can decrypt with the same
-// scheme: key = sha256(secret); output = base64(nonce[12] || ciphertext+tag).
+// shared secret (INTEGRATIONS_ENC_KEY, falling back to JWT_SECRET) so the Node
+// service can decrypt with the same scheme: key = sha256(secret); output =
+// base64(nonce[12] || ciphertext+tag).
 package crypto
 
 import (

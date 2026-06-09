@@ -1,12 +1,17 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+# go.sum is gitignored, so it is not present when Railway builds from the repo.
+# Copy go.mod alone and let `go mod download` regenerate go.sum into a cached
+# layer (the builder has network access).
+COPY go.mod ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/main.go
+# -mod=mod lets the build add any missing go.sum entries instead of failing the
+# way the default -mod=readonly would without a committed go.sum.
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -o main ./cmd/main.go
 
 FROM alpine:latest
 

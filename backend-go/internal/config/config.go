@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL      string
 	RedisURL         string
 	JWTSecret        string
+	IntegrationsEncKey string
 	AccessTokenTTL   time.Duration
 	RefreshTokenTTL  time.Duration
 	ResendAPIKey     string
@@ -26,6 +27,7 @@ type Config struct {
 	GoogleClientID     string
 	GoogleClientSecret string
 	GoogleRedirectURL  string
+	SentryDSN          string
 }
 
 // Load reads configuration from the environment and validates required values.
@@ -35,6 +37,11 @@ func Load() (*Config, error) {
 		DatabaseURL:      os.Getenv("DATABASE_URL"),
 		RedisURL:         os.Getenv("REDIS_URL"),
 		JWTSecret:        os.Getenv("JWT_SECRET"),
+		// Dedicated, stable key for encrypting account integration credentials.
+		// Falls back to JWT_SECRET so existing creds keep decrypting; set this in
+		// production before any customer connects a provider so rotating
+		// JWT_SECRET never locks saved credentials.
+		IntegrationsEncKey: getEnv("INTEGRATIONS_ENC_KEY", os.Getenv("JWT_SECRET")),
 		AccessTokenTTL:   15 * time.Minute,
 		RefreshTokenTTL:  7 * 24 * time.Hour,
 		ResendAPIKey:     os.Getenv("RESEND_API_KEY"),
@@ -49,6 +56,7 @@ func Load() (*Config, error) {
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:3001/api/v1/integrations/google/callback"),
+		SentryDSN:          os.Getenv("SENTRY_DSN"),
 	}
 
 	if cfg.DatabaseURL == "" {

@@ -18,6 +18,24 @@ const { startJourneyWorker } = require('./workers/journey.worker');
 const twilioWebhook = require('./webhooks/twilio');
 const resendWebhook = require('./webhooks/resend');
 
+// Error tracking (optional — only when SENTRY_DSN is set). Lazy-required so the
+// service runs locally without the dependency installed.
+let Sentry = null;
+if (config.sentryDsn) {
+  try {
+    Sentry = require('@sentry/node');
+    Sentry.init({ dsn: config.sentryDsn });
+    logger.info('sentry initialized');
+  } catch (err) {
+    logger.error({ err }, 'sentry init failed (is @sentry/node installed?)');
+    Sentry = null;
+  }
+}
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason }, 'unhandledRejection');
+  if (Sentry) Sentry.captureException(reason);
+});
+
 const app = express();
 app.use(cors());
 app.use(pinoHttp({ logger }));
@@ -27,6 +45,14 @@ app.get('/health', (_req, res) => res.json({ data: { status: 'ok' }, error: null
 // Inbound webhooks (each route parses its own body type).
 app.use('/webhooks', twilioWebhook);
 app.use('/webhooks', resendWebhook);
+
+// Sentry's Express error handler (captures with request context) sits before
+// our own 500 responder so it isn't double-reported.
+if (Sentry) Sentry.setupExpressErrorHandler(app);
+app.use((err, _req, res, _next) => {
+  logger.error({ err }, 'unhandled request error');
+  res.status(500).json({ data: null, error: 'internal error', meta: null });
+});
 
 const server = http.createServer(app);
 
@@ -47,6 +73,12 @@ startCampaignConsumer();
 
 // BullMQ workers (email, SMS, automation steps).
 const workers = [startEmailWorker(), startSmsWorker(), startAutomationWorker(), startCampaignWorker(), startJourneyWorker()];
+
+// BullMQ failures surface as 'failed' events (not Express / unhandledRejection),
+// so report background job failures to Sentry centrally.
+if (Sentry) {
+  workers.forEach((w) => w.on('failed', (_job, err) => Sentry.captureException(err)));
+}
 
 server.listen(config.port, () => {
   logger.info({ port: config.port }, 'Lydia Node real-time service listening');

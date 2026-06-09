@@ -7,6 +7,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
+
 	"crm-go-api/internal/api"
 	"crm-go-api/internal/config"
 	"crm-go-api/internal/database"
@@ -21,6 +24,15 @@ func main() {
 	if err != nil {
 		slog.Error("config load failed", "err", err)
 		os.Exit(1)
+	}
+
+	// Error tracking (optional — only when SENTRY_DSN is set).
+	if cfg.SentryDSN != "" {
+		if err := sentry.Init(sentry.ClientOptions{Dsn: cfg.SentryDSN}); err != nil {
+			slog.Error("sentry init failed", "err", err)
+		} else {
+			defer sentry.Flush(2 * time.Second)
+		}
 	}
 
 	ctx := context.Background()
@@ -52,11 +64,16 @@ func main() {
 
 	router := api.NewRouter(pool, cfg, publisher)
 
+	// Sentry HTTP middleware recovers panics in handlers, reports them, then
+	// re-panics so net/http's per-request recovery still returns a 500. No-op
+	// when Sentry was not initialized (no SENTRY_DSN).
+	sentryHandler := sentryhttp.New(sentryhttp.Options{Repanic: true})
+
 	srv := &http.Server{
 		Addr: ":" + cfg.Port,
 		// CORS wraps the whole router so it also answers preflight (OPTIONS)
 		// requests that don't match a registered method/route.
-		Handler:      middleware.CORS(router),
+		Handler:      middleware.CORS(sentryHandler.Handle(router)),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,

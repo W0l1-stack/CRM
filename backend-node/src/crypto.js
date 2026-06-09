@@ -1,10 +1,10 @@
 const crypto = require('crypto');
 const config = require('./config');
 
-// Mirrors the Go crypto package: AES-256-GCM, key = sha256(JWT_SECRET),
+// Mirrors the Go crypto package: AES-256-GCM, key = sha256(INTEGRATIONS_ENC_KEY),
 // payload = base64(nonce[12] || ciphertext || tag[16]).
 function key() {
-  return crypto.createHash('sha256').update(String(config.jwtSecret)).digest();
+  return crypto.createHash('sha256').update(String(config.integrationsEncKey)).digest();
 }
 
 function decrypt(encoded) {
